@@ -1,0 +1,36 @@
+use std::net::TcpListener;
+use env_logger::Env;
+use easy_experiments::config::get_config;
+use easy_experiments::models::ExperimentsDB;
+use easy_experiments::startup::run;
+use sqlx::migrate::Migrator;
+use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::SqliteConnectOptions;
+
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let config = get_config().expect("Failed to read configuration.");
+
+    let db_options = SqliteConnectOptions::new()
+        .filename(config.sqlite_filepath())
+        .create_if_missing(true);
+
+    let pool = SqlitePool::connect_with(db_options)
+        .await
+        .expect("Failed to create database pool");
+
+    MIGRATOR.run(&pool).await.expect("Migration failed");
+
+    let experiments_db = ExperimentsDB {
+        pool
+    };
+
+    let address = format!("0.0.0.0:{}", config.application_port);
+    let listener = TcpListener::bind(address)?;
+
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
+
+    run(listener, experiments_db, config.api_key)?.await
+}
