@@ -35,8 +35,8 @@ pub async fn db_find_user_by_google_sub(
 pub async fn db_update_user_profile(
     db: &ExperimentsDB,
     user_id: &str,
-    name: &str,
-    picture_url: &str,
+    name: Option<&str>,
+    picture_url: Option<&str>,
 ) -> Result<(), CustomError> {
     let now = Utc::now().timestamp_millis();
 
@@ -57,8 +57,8 @@ pub async fn db_update_user_profile(
 pub async fn db_create_user_and_company(
     db: &ExperimentsDB,
     email: &str,
-    name: &str,
-    picture_url: &str,
+    name: Option<&str>,
+    picture_url: Option<&str>,
     google_sub: &str,
 ) -> Result<(UserRow, CompanyRow), CustomError> {
     let now = Utc::now().timestamp_millis();
@@ -106,8 +106,8 @@ pub async fn db_create_user_and_company(
         user_id,
         company_id: company_id.clone(),
         email: email.to_string(),
-        name: name.to_string(),
-        picture_url: picture_url.to_string(),
+        name: name.map(str::to_string),
+        picture_url: picture_url.map(str::to_string),
         google_sub: google_sub.to_string(),
         created_at: now,
         updated_at: now,

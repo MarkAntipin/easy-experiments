@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::CustomError;
-use crate::models::db::{ExperimentRow, Segment, Variant};
+use crate::models::db::{ApiKeyRow, ExperimentRow, Segment, Variant};
 
 #[derive(Serialize, Deserialize)]
 pub struct MessageResponse {
@@ -107,8 +107,8 @@ pub struct LoginResponse {
 pub struct UserResponse {
     pub user_id: String,
     pub email: String,
-    pub name: String,
-    pub picture_url: String,
+    pub name: Option<String>,
+    pub picture_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -116,4 +116,34 @@ pub struct UserResponse {
 pub struct CompanyResponse {
     pub company_id: String,
     pub name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateApiKeyResponse {
+    pub api_key_id: String,
+    pub name: String,
+    pub key: String,
+    pub key_prefix: String,
+    pub created_at: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyListItem {
+    pub api_key_id: String,
+    pub name: String,
+    pub key_prefix: String,
+    pub created_at: i64,
+}
+
+impl From<ApiKeyRow> for ApiKeyListItem {
+    fn from(row: ApiKeyRow) -> Self {
+        Self {
+            api_key_id: row.api_key_id,
+            name: row.name,
+            key_prefix: row.key_prefix,
+            created_at: row.created_at,
+        }
+    }
 }

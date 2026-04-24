@@ -34,7 +34,6 @@ async fn main() -> std::io::Result<()> {
 
     env_logger::init_from_env(Env::default().default_filter_or("info"));
 
-    let api_key = config.api_key.expect("API_KEY must be set");
     let jwt_secret = config.jwt_secret.expect("JWT_SECRET must be set");
     let google_client_id = config.google_client_id.expect("GOOGLE_CLIENT_ID must be set");
     let google_verifier = GoogleTokenVerifier::new(google_client_id, config.google_jwks_url);
@@ -54,7 +53,6 @@ async fn main() -> std::io::Result<()> {
     run(
         listener,
         experiments_db,
-        api_key,
         jwt_secret,
         google_verifier,
         cors_allowed_origins,

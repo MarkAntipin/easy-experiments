@@ -20,11 +20,21 @@ pub struct UserRow {
     pub user_id: String,
     pub company_id: String,
     pub email: String,
-    pub name: String,
-    pub picture_url: String,
+    pub name: Option<String>,
+    pub picture_url: Option<String>,
     pub google_sub: String,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
+pub struct ApiKeyRow {
+    pub api_key_id: String,
+    pub company_id: String,
+    pub name: String,
+    pub key_hash: String,
+    pub key_prefix: String,
+    pub created_at: i64,
 }
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]

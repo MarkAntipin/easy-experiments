@@ -67,12 +67,14 @@ pub async fn db_get_experiment_by_id(
 pub async fn db_get_experiment_by_key(
     db: &ExperimentsDB,
     key: &str,
+    company_id: &str,
 ) -> Result<Option<ExperimentRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT experiment_id, key, description, status, primary_metric, variants, segments, started_at, stopped_at, created_at, updated_at, company_id
-         FROM experiments WHERE key = $1 AND status != 'deleted'",
+         FROM experiments WHERE key = $1 AND company_id = $2 AND status != 'deleted'",
     )
     .bind(key)
+    .bind(company_id)
     .fetch_optional(&db.pool)
     .await
 }
@@ -319,6 +321,8 @@ pub async fn db_delete_experiment(
 ) -> Result<bool, CustomError> {
     let now = Utc::now().timestamp_millis();
 
+    let mut tx = db.pool.begin().await.map_err(CustomError::from)?;
+
     let result = sqlx::query(
         "UPDATE experiments SET status = 'deleted', updated_at = $1
          WHERE experiment_id = $2 AND company_id = $3 AND status IN ('draft', 'stopped')",
@@ -326,11 +330,12 @@ pub async fn db_delete_experiment(
     .bind(now)
     .bind(id)
     .bind(company_id)
-    .execute(&db.pool)
+    .execute(&mut *tx)
     .await
     .map_err(CustomError::from)?;
 
     if result.rows_affected() > 0 {
+        tx.commit().await.map_err(CustomError::from)?;
         return Ok(true);
     }
 
@@ -340,9 +345,11 @@ pub async fn db_delete_experiment(
     )
     .bind(id)
     .bind(company_id)
-    .fetch_optional(&db.pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(CustomError::from)?;
+
+    tx.commit().await.map_err(CustomError::from)?;
 
     match existing {
         None => Ok(false),

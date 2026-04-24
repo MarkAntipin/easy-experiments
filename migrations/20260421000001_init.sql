@@ -9,8 +9,8 @@ CREATE TABLE users (
     user_id         TEXT PRIMARY KEY,
     company_id      TEXT NOT NULL REFERENCES companies(company_id),
     email           TEXT NOT NULL UNIQUE,
-    name            TEXT NOT NULL DEFAULT '',
-    picture_url     TEXT NOT NULL DEFAULT '',
+    name            TEXT,
+    picture_url     TEXT,
     google_sub      TEXT NOT NULL UNIQUE,
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL

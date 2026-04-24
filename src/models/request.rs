@@ -18,6 +18,7 @@ const MAX_KEY_LENGTH: usize = 256;
 const MAX_DESCRIPTION_LENGTH: usize = 4096;
 const MAX_PRIMARY_METRIC_LENGTH: usize = 256;
 const MAX_VARIANT_KEY_LENGTH: usize = 256;
+const MAX_VARIANT_ATTACHMENT_BYTES: usize = 16384;
 const MAX_CONSTRAINT_PROPERTY_LENGTH: usize = 256;
 const MAX_CONSTRAINT_VALUE_BYTES: usize = 4096;
 const MAX_VARIANTS: usize = 64;
@@ -60,6 +61,15 @@ pub struct UpdateExperimentRequest {
 
 impl Validate for UpdateExperimentRequest {
     fn validate(&self) -> Result<(), CustomError> {
+        if self.description.is_none()
+            && self.primary_metric.is_none()
+            && self.segments.is_none()
+            && self.variants.is_none()
+        {
+            return Err(CustomError::ValidationError(
+                "Request body must include at least one field to update".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -73,12 +83,22 @@ pub(crate) fn validate_experiment_state(
     validate_description(description)?;
     validate_primary_metric(primary_metric)?;
     validate_variants(variants)?;
-    validate_segments(segments, Some(variants))?;
+    validate_segments(segments, variants)?;
     Ok(())
 }
 
 fn validate_description(description: Option<&str>) -> Result<(), CustomError> {
     if let Some(desc) = description {
+        if desc.is_empty() {
+            return Err(CustomError::ValidationError(
+                "Description should not be empty; omit the field or send null to clear it".into(),
+            ));
+        }
+        if desc != desc.trim() {
+            return Err(CustomError::ValidationError(
+                "Description must not have leading or trailing whitespace".into(),
+            ));
+        }
         if desc.len() > MAX_DESCRIPTION_LENGTH {
             return Err(CustomError::ValidationError(format!(
                 "Description length should be less than {} bytes", MAX_DESCRIPTION_LENGTH
@@ -109,6 +129,11 @@ fn validate_primary_metric(primary_metric: &str) -> Result<(), CustomError> {
     if primary_metric.is_empty() {
         return Err(CustomError::ValidationError("Primary metric should not be empty".into()));
     }
+    if primary_metric != primary_metric.trim() {
+        return Err(CustomError::ValidationError(
+            "Primary metric must not have leading or trailing whitespace".into(),
+        ));
+    }
     if primary_metric.len() > MAX_PRIMARY_METRIC_LENGTH {
         return Err(CustomError::ValidationError(format!(
             "Primary metric length should be less than {} bytes", MAX_PRIMARY_METRIC_LENGTH
@@ -133,6 +158,11 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
         if variant.key.is_empty() {
             return Err(CustomError::ValidationError("Variant key should not be empty".into()));
         }
+        if variant.key != variant.key.trim() {
+            return Err(CustomError::ValidationError(
+                "Variant key must not have leading or trailing whitespace".into(),
+            ));
+        }
         if variant.key.len() > MAX_VARIANT_KEY_LENGTH {
             return Err(CustomError::ValidationError(format!(
                 "Variant key length should be less than {} bytes", MAX_VARIANT_KEY_LENGTH
@@ -141,6 +171,17 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
         if !seen.insert(variant.key.as_str()) {
             return Err(CustomError::ValidationError(format!(
                 "Duplicate variant key '{}'", variant.key
+            )));
+        }
+        let attachment_bytes = serde_json::to_vec(&variant.attachment)
+            .map_err(|e| {
+                CustomError::InternalError(format!("Failed to serialize attachment: {}", e))
+            })?
+            .len();
+        if attachment_bytes > MAX_VARIANT_ATTACHMENT_BYTES {
+            return Err(CustomError::ValidationError(format!(
+                "Variant attachment size should be less than {} bytes",
+                MAX_VARIANT_ATTACHMENT_BYTES
             )));
         }
         if variant.is_control {
@@ -155,7 +196,7 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
     Ok(())
 }
 
-fn validate_segments(segments: &[Segment], variants: Option<&[Variant]>) -> Result<(), CustomError> {
+fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), CustomError> {
     if segments.is_empty() {
         return Err(CustomError::ValidationError("Must have at least one segment".into()));
     }
@@ -165,8 +206,7 @@ fn validate_segments(segments: &[Segment], variants: Option<&[Variant]>) -> Resu
         )));
     }
 
-    let variant_keys: Option<HashSet<&str>> = variants
-        .map(|vs| vs.iter().map(|v| v.key.as_str()).collect());
+    let variant_keys: HashSet<&str> = variants.iter().map(|v| v.key.as_str()).collect();
 
     let mut seen_ranks = HashSet::with_capacity(segments.len());
     for segment in segments {
@@ -221,20 +261,24 @@ fn validate_segments(segments: &[Segment], variants: Option<&[Variant]>) -> Resu
             )));
         }
         let mut total: u32 = 0;
+        let mut seen_dist_keys = HashSet::with_capacity(segment.distributions.len());
         for dist in &segment.distributions {
             if dist.percent > 100 {
                 return Err(CustomError::ValidationError(
                     "Distribution percent must be between 0 and 100".into(),
                 ));
             }
-            total = total.saturating_add(dist.percent);
-            if let Some(ref keys) = variant_keys {
-                if !keys.contains(dist.variant_key.as_str()) {
-                    return Err(CustomError::ValidationError(format!(
-                        "Distribution references unknown variant key '{}'", dist.variant_key
-                    )));
-                }
+            if !variant_keys.contains(dist.variant_key.as_str()) {
+                return Err(CustomError::ValidationError(format!(
+                    "Distribution references unknown variant key '{}'", dist.variant_key
+                )));
             }
+            if !seen_dist_keys.insert(dist.variant_key.as_str()) {
+                return Err(CustomError::ValidationError(format!(
+                    "Duplicate distribution for variant key '{}' in segment", dist.variant_key
+                )));
+            }
+            total = total.saturating_add(dist.percent);
         }
         if total != 100 {
             return Err(CustomError::ValidationError(
@@ -270,13 +314,24 @@ fn validate_constraint_value_shape(
             }
         }
         ConstraintOperator::In | ConstraintOperator::NotIn => match value.as_array() {
-            Some(arr) if !arr.is_empty() => Ok(()),
-            Some(_) => Err(CustomError::ValidationError(
-                "IN/NOT_IN constraint value must be a non-empty array".into(),
-            )),
             None => Err(CustomError::ValidationError(
                 "IN/NOT_IN constraint value must be an array".into(),
             )),
+            Some(arr) if arr.is_empty() => Err(CustomError::ValidationError(
+                "IN/NOT_IN constraint value must be a non-empty array".into(),
+            )),
+            Some(arr) => {
+                if arr
+                    .iter()
+                    .all(|v| matches!(v, Value::String(_) | Value::Number(_) | Value::Bool(_)))
+                {
+                    Ok(())
+                } else {
+                    Err(CustomError::ValidationError(
+                        "IN/NOT_IN constraint value array elements must be strings, numbers, or booleans".into(),
+                    ))
+                }
+            }
         },
     }
 }
@@ -284,6 +339,36 @@ fn validate_constraint_value_shape(
 #[derive(Serialize, Deserialize)]
 pub struct GoogleLoginRequest {
     pub token: String,
+}
+
+const MAX_API_KEY_NAME_LENGTH: usize = 128;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateApiKeyRequest {
+    pub name: String,
+}
+
+impl Validate for CreateApiKeyRequest {
+    fn validate(&self) -> Result<(), CustomError> {
+        if self.name.is_empty() {
+            return Err(CustomError::ValidationError(
+                "API key name should not be empty".into(),
+            ));
+        }
+        if self.name != self.name.trim() {
+            return Err(CustomError::ValidationError(
+                "API key name must not have leading or trailing whitespace".into(),
+            ));
+        }
+        if self.name.len() > MAX_API_KEY_NAME_LENGTH {
+            return Err(CustomError::ValidationError(format!(
+                "API key name length should be less than {} bytes",
+                MAX_API_KEY_NAME_LENGTH
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize)]

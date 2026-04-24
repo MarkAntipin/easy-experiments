@@ -3,19 +3,20 @@ use actix_web::HttpResponse;
 
 use crate::errors::CustomError;
 use crate::models::{
-    ExperimentsDB, ExperimentStatus, EvaluateRequest, EvaluateResponse,
-    Constraint, ConstraintOperator, Distribution, Segment, Variant,
+    AuthenticatedApiKey, Constraint, ConstraintOperator, Distribution, EvaluateRequest,
+    EvaluateResponse, ExperimentStatus, ExperimentsDB, Segment, Variant,
 };
 use crate::repository::db_get_experiment_by_key;
 use crate::validation::ValidatedJson;
 
 pub async fn evaluate(
     db: web::Data<ExperimentsDB>,
+    api_key: web::ReqData<AuthenticatedApiKey>,
     payload: ValidatedJson<EvaluateRequest>,
 ) -> Result<HttpResponse, CustomError> {
     let request = payload.into_inner();
 
-    let experiment = match db_get_experiment_by_key(&db, &request.experiment_key)
+    let experiment = match db_get_experiment_by_key(&db, &request.experiment_key, &api_key.company_id)
         .await
         .map_err(CustomError::from)?
     {

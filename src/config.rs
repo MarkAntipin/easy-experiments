@@ -7,8 +7,6 @@ use std::path::PathBuf;
 pub struct Config {
     pub application_port: u16,
 
-    pub api_key: Option<String>,
-
     pub jwt_secret: Option<String>,
 
     pub google_client_id: Option<String>,

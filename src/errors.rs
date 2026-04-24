@@ -61,7 +61,8 @@ impl ResponseError for CustomError {
 }
 
 impl From<sqlx::Error> for CustomError {
-    fn from(_: sqlx::Error) -> Self {
+    fn from(err: sqlx::Error) -> Self {
+        log::error!("sqlx error: {}", err);
         CustomError::InternalError("Internal Server Error".to_string())
     }
 }

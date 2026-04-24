@@ -22,24 +22,27 @@ pub async fn google_login(
 
     let token_info = google_verifier.verify(&request.token).await?;
 
+    let token_name = Some(token_info.name.as_str()).filter(|s| !s.is_empty());
+    let token_picture = Some(token_info.picture.as_str()).filter(|s| !s.is_empty());
+
     let (mut user, company) = match db_find_user_by_google_sub(&db, &token_info.sub).await? {
         Some((u, c)) => (u, c),
         None => {
             db_create_user_and_company(
                 &db,
                 &token_info.email,
-                &token_info.name,
-                &token_info.picture,
+                token_name,
+                token_picture,
                 &token_info.sub,
             )
             .await?
         }
     };
 
-    if user.name != token_info.name || user.picture_url != token_info.picture {
-        db_update_user_profile(&db, &user.user_id, &token_info.name, &token_info.picture).await?;
-        user.name = token_info.name;
-        user.picture_url = token_info.picture;
+    if user.name.as_deref() != token_name || user.picture_url.as_deref() != token_picture {
+        db_update_user_profile(&db, &user.user_id, token_name, token_picture).await?;
+        user.name = token_name.map(str::to_string);
+        user.picture_url = token_picture.map(str::to_string);
     }
 
     let auth_user = AuthenticatedUser {

@@ -12,18 +12,23 @@ use actix_cors::Cors;
 use crate::{
     errors::CustomError,
     models::{ExperimentsDB, JwtSecret},
+    repository::db_find_api_key_by_hash,
     routes::{
+        create_api_key,
         create_experiment,
-        get_experiments,
-        get_experiment_by_id,
-        update_experiment,
-        start_experiment,
-        stop_experiment,
         delete_experiment,
         evaluate,
-        health_check,
+        get_experiment_by_id,
+        get_experiments,
         google_login,
+        health_check,
+        list_api_keys,
+        revoke_api_key,
+        start_experiment,
+        stop_experiment,
+        update_experiment,
     },
+    services::api_key::{hash_api_key, is_plausible_api_key},
     services::google_auth::GoogleTokenVerifier,
     services::jwt::verify_jwt,
 };
@@ -54,13 +59,25 @@ async fn api_key_auth_middleware(
             CustomError::UnauthorizedError("missing or invalid `X-Api-Key` header".to_string())
         })?;
 
-    let expected = req
-        .app_data::<web::Data<String>>()
-        .ok_or_else(|| CustomError::InternalError("API key not configured".to_string()))?;
-
-    if provided.as_str() != expected.get_ref().as_str() {
-        return Err(CustomError::ForbiddenError("invalid `X-Api-Key` header".to_string()).into());
+    if !is_plausible_api_key(&provided) {
+        return Err(CustomError::UnauthorizedError("invalid API key".to_string()).into());
     }
+
+    let db = req
+        .app_data::<web::Data<ExperimentsDB>>()
+        .ok_or_else(|| CustomError::InternalError("Database not configured".to_string()))?;
+
+    let hash = hash_api_key(&provided);
+    let row = db_find_api_key_by_hash(db, &hash)
+        .await?
+        .ok_or_else(|| CustomError::UnauthorizedError("invalid API key".to_string()))?;
+
+    let authenticated = crate::models::AuthenticatedApiKey {
+        api_key_id: row.api_key_id,
+        company_id: row.company_id,
+    };
+
+    req.extensions_mut().insert(authenticated);
 
     next.call(req).await
 }
@@ -99,13 +116,11 @@ async fn jwt_auth_middleware(
 pub fn run(
     listener: TcpListener,
     db: ExperimentsDB,
-    api_key: String,
     jwt_secret: String,
     google_verifier: GoogleTokenVerifier,
     cors_allowed_origins: Vec<String>,
 ) -> Result<Server, std::io::Error> {
     let db = web::Data::new(db);
-    let api_key = web::Data::new(api_key);
     let jwt_secret = web::Data::new(JwtSecret(jwt_secret));
     let google_verifier = web::Data::new(google_verifier);
 
@@ -135,6 +150,13 @@ pub fn run(
                         .route("/{id}/stop", web::post().to(stop_experiment))
                 )
                 .service(
+                    web::scope("/api-keys")
+                        .wrap(from_fn(jwt_auth_middleware))
+                        .route("", web::post().to(create_api_key))
+                        .route("", web::get().to(list_api_keys))
+                        .route("/{id}", web::delete().to(revoke_api_key))
+                )
+                .service(
                     web::scope("/auth")
                         .route("/google", web::post().to(google_login))
                 )
@@ -148,7 +170,6 @@ pub fn run(
                 )
             )
             .route("/health", web::get().to(health_check))
-            .app_data(api_key.clone())
             .app_data(db.clone())
             .app_data(jwt_secret.clone())
             .app_data(google_verifier.clone())
