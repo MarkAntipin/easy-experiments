@@ -1,200 +1,354 @@
-use sqlx;
-use crate::errors::CustomError;
-use crate::models::{ExperimentDBRow, ExperimentsDB};
-use crate::enums::ExperimentStatus;
 use chrono::Utc;
+use sqlx::{self, QueryBuilder, Sqlite};
+use uuid::Uuid;
+
+use crate::errors::CustomError;
+use crate::models::{ExperimentRow, ExperimentStatus, ExperimentsDB, Segment, Variant};
 
 pub async fn db_create_experiment(
     db: &ExperimentsDB,
-    row: &ExperimentDBRow,
-) -> Result<Option<i64>, sqlx::Error> {
-    let status_str = row.status.to_string();
+    key: &str,
+    description: Option<&str>,
+    primary_metric: &str,
+    variants: &[Variant],
+    segments: &[Segment],
+    company_id: &str,
+) -> Result<String, CustomError> {
+    let experiment_id = Uuid::new_v4().to_string();
+    let now = Utc::now().timestamp_millis();
+    let variants_json = serde_json::to_string(variants)
+        .map_err(|e| CustomError::InternalError(format!("Failed to serialize variants: {}", e)))?;
+    let segments_json = serde_json::to_string(segments)
+        .map_err(|e| CustomError::InternalError(format!("Failed to serialize segments: {}", e)))?;
 
-    let result = sqlx::query!(
-        r#"
-        INSERT INTO experiments (name, description, status, variants, traffic_percentage, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT(name) DO NOTHING
-        "#,
-        row.name,
-        row.description,
-        status_str,
-        row.variants,
-        row.traffic_percentage,
-        row.created_at,
-        row.updated_at
+    let result = sqlx::query(
+        "INSERT INTO experiments (experiment_id, key, description, status, primary_metric, variants, segments, created_at, updated_at, company_id)
+         VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (company_id, key) WHERE status != 'deleted' DO NOTHING",
     )
+    .bind(&experiment_id)
+    .bind(key)
+    .bind(description)
+    .bind(primary_metric)
+    .bind(&variants_json)
+    .bind(&segments_json)
+    .bind(now)
+    .bind(now)
+    .bind(company_id)
     .execute(&db.pool)
-    .await?;
+    .await
+    .map_err(CustomError::from)?;
 
-    if result.rows_affected() > 0 {
-        let id_row = sqlx::query!("SELECT last_insert_rowid() as id")
-            .fetch_one(&db.pool)
-            .await?;
-        Ok(Some(id_row.id as i64))
-    } else {
-        Ok(None)
+    if result.rows_affected() == 0 {
+        return Err(CustomError::ConflictError(format!(
+            "Experiment with key '{}' already exists",
+            key
+        )));
     }
+
+    Ok(experiment_id)
 }
 
 pub async fn db_get_experiment_by_id(
     db: &ExperimentsDB,
-    id: i64,
-) -> Result<Option<ExperimentDBRow>, sqlx::Error> {
-    let row: Option<ExperimentDBRow> = sqlx::query_as!(
-        ExperimentDBRow,
-        r#"
-        SELECT
-            id as "id!",
-            name as "name!",
-            description as "description!",
-            status as "status!: _",
-            variants as "variants!",
-            traffic_percentage as "traffic_percentage!",
-            created_at as "created_at!: _",
-            updated_at as "updated_at!: _"
-        FROM experiments
-        WHERE id = $1
-        "#,
-        id
+    id: &str,
+    company_id: &str,
+) -> Result<Option<ExperimentRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT experiment_id, key, description, status, primary_metric, variants, segments, started_at, stopped_at, created_at, updated_at, company_id
+         FROM experiments WHERE experiment_id = $1 AND company_id = $2 AND status != 'deleted'",
     )
+    .bind(id)
+    .bind(company_id)
     .fetch_optional(&db.pool)
-    .await?;
+    .await
+}
 
-    Ok(row)
+pub async fn db_get_experiment_by_key(
+    db: &ExperimentsDB,
+    key: &str,
+) -> Result<Option<ExperimentRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT experiment_id, key, description, status, primary_metric, variants, segments, started_at, stopped_at, created_at, updated_at, company_id
+         FROM experiments WHERE key = $1 AND status != 'deleted'",
+    )
+    .bind(key)
+    .fetch_optional(&db.pool)
+    .await
 }
 
 pub async fn db_get_experiments(
     db: &ExperimentsDB,
-    status: Option<String>,
-) -> Result<Vec<ExperimentDBRow>, sqlx::Error> {
-    let rows = match status {
+    status: Option<ExperimentStatus>,
+    company_id: &str,
+) -> Result<Vec<ExperimentRow>, sqlx::Error> {
+    match status {
         Some(status_filter) => {
-            sqlx::query_as!(
-                ExperimentDBRow,
-                r#"
-                SELECT
-                    id as "id!",
-                    name as "name!",
-                    description as "description!",
-                    status as "status!: _",
-                    variants as "variants!",
-                    traffic_percentage as "traffic_percentage!",
-                    created_at as "created_at!: _",
-                    updated_at as "updated_at!: _"
-                FROM experiments
-                WHERE status = $1
-                ORDER BY created_at DESC
-                "#,
-                status_filter
+            sqlx::query_as(
+                "SELECT experiment_id, key, description, status, primary_metric, variants, segments, started_at, stopped_at, created_at, updated_at, company_id
+                 FROM experiments WHERE status = $1 AND company_id = $2 ORDER BY updated_at DESC",
             )
+            .bind(status_filter.to_string())
+            .bind(company_id)
             .fetch_all(&db.pool)
-            .await?
+            .await
         }
         None => {
-            sqlx::query_as!(
-                ExperimentDBRow,
-                r#"
-                SELECT
-                    id as "id!",
-                    name as "name!",
-                    description as "description!",
-                    status as "status!: _",
-                    variants as "variants!",
-                    traffic_percentage as "traffic_percentage!",
-                    created_at as "created_at!: _",
-                    updated_at as "updated_at!: _"
-                FROM experiments
-                ORDER BY created_at DESC
-                "#,
+            sqlx::query_as(
+                "SELECT experiment_id, key, description, status, primary_metric, variants, segments, started_at, stopped_at, created_at, updated_at, company_id
+                 FROM experiments WHERE company_id = $1 AND status != 'deleted' ORDER BY updated_at DESC",
             )
+            .bind(company_id)
             .fetch_all(&db.pool)
-            .await?
+            .await
         }
-    };
-    Ok(rows)
+    }
+}
+
+#[derive(Default)]
+pub struct UpdateExperimentFields<'a> {
+    /// `None` = don't touch; `Some(None)` = set to NULL; `Some(Some(v))` = set to v.
+    pub description: Option<Option<&'a str>>,
+    pub primary_metric: Option<&'a str>,
+    pub variants: Option<&'a [Variant]>,
+    pub segments: Option<&'a [Segment]>,
+}
+
+impl<'a> UpdateExperimentFields<'a> {
+    pub fn is_empty(&self) -> bool {
+        self.description.is_none()
+            && self.primary_metric.is_none()
+            && self.variants.is_none()
+            && self.segments.is_none()
+    }
+
+    pub fn is_structural(&self) -> bool {
+        self.primary_metric.is_some() || self.variants.is_some() || self.segments.is_some()
+    }
+}
+
+pub enum UpdateExperimentOutcome {
+    Updated,
+    NotFound,
+    StatusConflict(ExperimentStatus),
+    VersionConflict,
 }
 
 pub async fn db_update_experiment(
     db: &ExperimentsDB,
-    id: i64,
-    name: Option<&str>,
-    description: Option<&str>,
-    variants: Option<&str>,
-    traffic_percentage: Option<f64>,
-) -> Result<Option<i64>, CustomError> {
-    let existing = db_get_experiment_by_id(db, id).await.map_err(CustomError::from)?;
-    if existing.is_none() {
-        return Ok(None);
+    id: &str,
+    company_id: &str,
+    fields: UpdateExperimentFields<'_>,
+    expected_updated_at: Option<i64>,
+) -> Result<UpdateExperimentOutcome, CustomError> {
+    if fields.is_empty() && expected_updated_at.is_none() {
+        return Ok(UpdateExperimentOutcome::Updated);
     }
-    let existing = existing.unwrap();
 
-    let new_name = name.unwrap_or(&existing.name);
-    let new_description = description.unwrap_or(&existing.description);
-    let new_variants = variants.unwrap_or(&existing.variants);
-    let new_traffic = traffic_percentage.unwrap_or(existing.traffic_percentage);
-    let now = Utc::now();
+    let now = Utc::now().timestamp_millis();
+    let structural = fields.is_structural();
 
-    sqlx::query!(
-        r#"
-        UPDATE experiments
-        SET name = $1, description = $2, variants = $3, traffic_percentage = $4, updated_at = $5
-        WHERE id = $6
-        "#,
-        new_name,
-        new_description,
-        new_variants,
-        new_traffic,
-        now,
-        id
+    let variants_json = fields
+        .variants
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| CustomError::InternalError(format!("Failed to serialize variants: {}", e)))?;
+    let segments_json = fields
+        .segments
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| CustomError::InternalError(format!("Failed to serialize segments: {}", e)))?;
+
+    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("UPDATE experiments SET updated_at = ");
+    qb.push_bind(now);
+    if let Some(desc) = fields.description {
+        qb.push(", description = ");
+        qb.push_bind(desc);
+    }
+    if let Some(pm) = fields.primary_metric {
+        qb.push(", primary_metric = ");
+        qb.push_bind(pm);
+    }
+    if let Some(v) = variants_json.as_ref() {
+        qb.push(", variants = ");
+        qb.push_bind(v);
+    }
+    if let Some(s) = segments_json.as_ref() {
+        qb.push(", segments = ");
+        qb.push_bind(s);
+    }
+    qb.push(" WHERE experiment_id = ");
+    qb.push_bind(id);
+    qb.push(" AND company_id = ");
+    qb.push_bind(company_id);
+    if structural {
+        qb.push(" AND status = 'draft'");
+    } else {
+        qb.push(" AND status != 'deleted'");
+    }
+    if let Some(expected) = expected_updated_at {
+        qb.push(" AND updated_at = ");
+        qb.push_bind(expected);
+    }
+
+    let result = qb
+        .build()
+        .execute(&db.pool)
+        .await
+        .map_err(CustomError::from)?;
+
+    if result.rows_affected() > 0 {
+        return Ok(UpdateExperimentOutcome::Updated);
+    }
+
+    let existing: Option<(ExperimentStatus, i64)> = sqlx::query_as(
+        "SELECT status, updated_at FROM experiments
+         WHERE experiment_id = $1 AND company_id = $2 AND status != 'deleted'",
     )
-    .execute(&db.pool)
+    .bind(id)
+    .bind(company_id)
+    .fetch_optional(&db.pool)
     .await
     .map_err(CustomError::from)?;
 
-    Ok(Some(id))
+    match existing {
+        None => Ok(UpdateExperimentOutcome::NotFound),
+        Some((current_status, current_updated_at)) => {
+            if let Some(expected) = expected_updated_at {
+                if current_updated_at != expected {
+                    return Ok(UpdateExperimentOutcome::VersionConflict);
+                }
+            }
+            if structural && current_status != ExperimentStatus::Draft {
+                return Ok(UpdateExperimentOutcome::StatusConflict(current_status));
+            }
+            // No real change occurred (e.g. same values). Treat as success.
+            Ok(UpdateExperimentOutcome::Updated)
+        }
+    }
 }
 
-pub async fn db_update_experiment_status(
+pub async fn db_start_experiment(
     db: &ExperimentsDB,
-    id: i64,
-    status: ExperimentStatus,
-) -> Result<Option<i64>, CustomError> {
-    let existing = db_get_experiment_by_id(db, id).await.map_err(CustomError::from)?;
-    if existing.is_none() {
-        return Ok(None);
-    }
+    id: &str,
+    company_id: &str,
+) -> Result<Option<ExperimentStatus>, CustomError> {
+    let now = Utc::now().timestamp_millis();
 
-    let status_str = status.to_string();
-    let now = Utc::now();
-
-    sqlx::query!(
-        r#"
-        UPDATE experiments
-        SET status = $1, updated_at = $2
-        WHERE id = $3
-        "#,
-        status_str,
-        now,
-        id
+    let result = sqlx::query(
+        "UPDATE experiments SET status = 'running', started_at = $1, updated_at = $2
+         WHERE experiment_id = $3 AND company_id = $4 AND status = 'draft'",
     )
+    .bind(now)
+    .bind(now)
+    .bind(id)
+    .bind(company_id)
     .execute(&db.pool)
     .await
     .map_err(CustomError::from)?;
 
-    Ok(Some(id))
+    if result.rows_affected() > 0 {
+        return Ok(Some(ExperimentStatus::Running));
+    }
+
+    let existing: Option<ExperimentStatus> = sqlx::query_scalar(
+        "SELECT status FROM experiments
+         WHERE experiment_id = $1 AND company_id = $2 AND status != 'deleted'",
+    )
+    .bind(id)
+    .bind(company_id)
+    .fetch_optional(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+
+    match existing {
+        None => Ok(None),
+        Some(status) => Err(CustomError::ConflictError(format!(
+            "Can only start experiments in 'draft' status, current status is '{}'",
+            status
+        ))),
+    }
+}
+
+pub async fn db_stop_experiment(
+    db: &ExperimentsDB,
+    id: &str,
+    company_id: &str,
+) -> Result<Option<ExperimentStatus>, CustomError> {
+    let now = Utc::now().timestamp_millis();
+
+    let result = sqlx::query(
+        "UPDATE experiments SET status = 'stopped', stopped_at = $1, updated_at = $2
+         WHERE experiment_id = $3 AND company_id = $4 AND status = 'running'",
+    )
+    .bind(now)
+    .bind(now)
+    .bind(id)
+    .bind(company_id)
+    .execute(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+
+    if result.rows_affected() > 0 {
+        return Ok(Some(ExperimentStatus::Stopped));
+    }
+
+    let existing: Option<ExperimentStatus> = sqlx::query_scalar(
+        "SELECT status FROM experiments
+         WHERE experiment_id = $1 AND company_id = $2 AND status != 'deleted'",
+    )
+    .bind(id)
+    .bind(company_id)
+    .fetch_optional(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+
+    match existing {
+        None => Ok(None),
+        Some(status) => Err(CustomError::ConflictError(format!(
+            "Can only stop experiments in 'running' status, current status is '{}'",
+            status
+        ))),
+    }
 }
 
 pub async fn db_delete_experiment(
     db: &ExperimentsDB,
-    id: i64,
-) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
-        "DELETE FROM experiments WHERE id = $1",
-        id
-    )
-    .execute(&db.pool)
-    .await?;
+    id: &str,
+    company_id: &str,
+) -> Result<bool, CustomError> {
+    let now = Utc::now().timestamp_millis();
 
-    Ok(result.rows_affected() > 0)
+    let result = sqlx::query(
+        "UPDATE experiments SET status = 'deleted', updated_at = $1
+         WHERE experiment_id = $2 AND company_id = $3 AND status IN ('draft', 'stopped')",
+    )
+    .bind(now)
+    .bind(id)
+    .bind(company_id)
+    .execute(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+
+    if result.rows_affected() > 0 {
+        return Ok(true);
+    }
+
+    let existing: Option<ExperimentStatus> = sqlx::query_scalar(
+        "SELECT status FROM experiments
+         WHERE experiment_id = $1 AND company_id = $2 AND status != 'deleted'",
+    )
+    .bind(id)
+    .bind(company_id)
+    .fetch_optional(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+
+    match existing {
+        None => Ok(false),
+        Some(status) => Err(CustomError::ConflictError(format!(
+            "Cannot delete experiment in '{}' status, stop it first",
+            status
+        ))),
+    }
 }

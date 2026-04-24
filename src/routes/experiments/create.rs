@@ -2,27 +2,32 @@ use actix_web::web;
 use actix_web::HttpResponse;
 
 use crate::errors::CustomError;
-use crate::models::{MessageResponse, CreateExperimentRequest, ExperimentDBRow, ExperimentsDB};
+use crate::models::{
+    AuthenticatedUser, CreateExperimentRequest, CreateExperimentResponse, ExperimentsDB,
+};
 use crate::repository::db_create_experiment;
+use crate::validation::ValidatedJson;
 
 pub async fn create_experiment(
     db: web::Data<ExperimentsDB>,
-    payload: web::Json<CreateExperimentRequest>,
+    user: web::ReqData<AuthenticatedUser>,
+    payload: ValidatedJson<CreateExperimentRequest>,
 ) -> Result<HttpResponse, CustomError> {
     let request = payload.into_inner();
-    request.validate()?;
 
-    let row: ExperimentDBRow = request.into();
-    let id = db_create_experiment(&db, &row).await?;
+    let id = db_create_experiment(
+        &db,
+        &request.key,
+        request.description.as_deref(),
+        &request.primary_metric,
+        &request.variants,
+        &request.segments,
+        &user.company_id,
+    )
+    .await?;
 
-    if id.is_none() {
-        return Err(CustomError::ConflictError(
-            format!("Experiment with name '{}' already exists", row.name)
-        ));
-    }
-
-    let response = MessageResponse {
-        message: format!("Experiment '{}' created with id {}", row.name, id.unwrap()),
-    };
-    Ok(HttpResponse::Created().json(response))
+    Ok(HttpResponse::Created().json(CreateExperimentResponse {
+        experiment_id: id,
+        message: "Experiment created".to_string(),
+    }))
 }

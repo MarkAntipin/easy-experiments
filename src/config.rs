@@ -1,53 +1,49 @@
-use config::Environment;
+use config::{Config as RawConfig, Environment};
 use dotenv::dotenv;
 use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    #[serde(default = "default_application_port")]
     pub application_port: u16,
 
-    #[serde(default = "default_api_key")]
-    pub api_key: String,
+    pub api_key: Option<String>,
 
-    #[serde(default = "default_sqlite_url")]
+    pub jwt_secret: Option<String>,
+
+    pub google_client_id: Option<String>,
+
+    pub google_jwks_url: String,
+
     pub sqlite_url: String,
 
-    #[serde(default = "default_duckdb_path")]
     pub duckdb_path: String,
+
+    pub cors_allowed_origins: Option<String>,
 }
 
 impl Config {
     pub fn sqlite_filepath(&self) -> PathBuf {
-        let path = self.sqlite_url.strip_prefix("sqlite://")
-            .expect("Invalid sqlite_url format");
-        PathBuf::from(&path)
+        let path = self
+            .sqlite_url
+            .strip_prefix("sqlite://")
+            .unwrap_or(&self.sqlite_url);
+        PathBuf::from(path)
     }
-}
-
-fn default_application_port() -> u16 {
-    18200
-}
-
-fn default_api_key() -> String {
-    "api-key".to_string()
-}
-
-fn default_sqlite_url() -> String {
-    "sqlite://easy-experiments.db".to_string()
-}
-
-fn default_duckdb_path() -> String {
-    "easy-experiments.duckdb".to_string()
 }
 
 pub fn get_config() -> Result<Config, config::ConfigError> {
     dotenv().ok();
 
-    let mut conf = config::Config::default();
-
-    conf.merge(Environment::default().separator(""))?;
-
-    conf.try_into()
+    RawConfig::builder()
+        .set_default("application_port", 18200)?
+        .set_default("sqlite_url", "sqlite://easy-experiments.db")?
+        .set_default("duckdb_path", "easy-experiments.duckdb")?
+        .set_default(
+            "google_jwks_url",
+            crate::services::google_auth::DEFAULT_GOOGLE_JWKS_URL,
+        )?
+        .add_source(Environment::default().separator(""))
+        .build()?
+        .try_deserialize()
 }

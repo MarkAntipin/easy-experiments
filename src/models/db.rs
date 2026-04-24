@@ -1,44 +1,94 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-use crate::enums::ExperimentStatus;
-use crate::models::CreateExperimentRequest;
 use sqlx::sqlite::SqlitePool;
+
+use super::ExperimentStatus;
 
 pub struct ExperimentsDB {
     pub pool: SqlitePool,
 }
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
-pub struct ExperimentDBRow {
-    pub id: i64,
+pub struct CompanyRow {
+    pub company_id: String,
     pub name: String,
-    pub description: String,
-    pub status: ExperimentStatus,
-    pub variants: String,
-
-    #[serde(rename = "trafficPercentage")]
-    pub traffic_percentage: f64,
-
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
-impl From<CreateExperimentRequest> for ExperimentDBRow {
-    fn from(request: CreateExperimentRequest) -> Self {
-        let now = Utc::now();
-        let variants_json = serde_json::to_string(&request.variants).unwrap_or_else(|_| "[]".to_string());
-        Self {
-            id: 0,
-            name: request.name,
-            description: request.description.unwrap_or_default(),
-            status: ExperimentStatus::Draft,
-            variants: variants_json,
-            traffic_percentage: request.traffic_percentage.unwrap_or(100.0),
-            created_at: now,
-            updated_at: now,
-        }
-    }
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
+pub struct UserRow {
+    pub user_id: String,
+    pub company_id: String,
+    pub email: String,
+    pub name: String,
+    pub picture_url: String,
+    pub google_sub: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExperimentRow {
+    pub experiment_id: String,
+    pub key: String,
+    pub description: Option<String>,
+    pub status: ExperimentStatus,
+    pub primary_metric: String,
+    pub variants: String,
+    pub segments: String,
+    pub started_at: Option<i64>,
+    pub stopped_at: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub company_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Variant {
+    pub key: String,
+    pub is_control: bool,
+    #[serde(default = "default_attachment")]
+    pub attachment: serde_json::Value,
+}
+
+fn default_attachment() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Segment {
+    pub rank: i32,
+    pub rollout_percent: u32,
+    #[serde(default)]
+    pub constraints: Vec<Constraint>,
+    pub distributions: Vec<Distribution>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConstraintOperator {
+    Eq,
+    Neq,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+    In,
+    NotIn,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Constraint {
+    pub property: String,
+    pub operator: ConstraintOperator,
+    pub value: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Distribution {
+    pub variant_key: String,
+    pub percent: u32,
 }

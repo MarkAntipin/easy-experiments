@@ -1,3 +1,3 @@
-mod validate_token;
+mod login;
 
-pub use validate_token::validate_token;
+pub use login::google_login;

@@ -2,3 +2,9 @@
 *.db
 *.duckdb
 .env
+.idea
+tags
+**/*.rs.bk
+.DS_Store
+/db
+/.claude
