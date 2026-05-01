@@ -151,7 +151,7 @@ async fn spawn_app() -> TestApp {
         DEFAULT_GOOGLE_JWKS_URL.to_string(),
     );
 
-    let db = ExperimentsDB { pool: pool.clone() };
+    let db = ExperimentsDB::new(pool.clone());
     let event_sink: Arc<dyn EventSink> = Arc::new(NoopEventSink);
     let server = run(
         listener,
@@ -246,12 +246,12 @@ pub fn valid_experiment_body(key: &str) -> Value {
         "description": "A test experiment",
         "primaryMetric": "conversion_rate",
         "variants": [
-            { "key": "control", "isControl": true, "attachment": {} },
-            { "key": "treatment", "isControl": false, "attachment": {} }
+            { "key": "control", "isControl": true, "config": {} },
+            { "key": "treatment", "isControl": false, "config": {} }
         ],
         "segments": [
             {
-                "rank": 0,
+                "priority": 0,
                 "rolloutPercent": 100,
                 "constraints": [],
                 "distributions": [

@@ -1,10 +1,39 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;
 
-use super::ExperimentStatus;
+use super::{ExperimentStatus, Segment, Variant};
+
+pub type ExperimentCacheKey = (String, String);
+pub type ExperimentCache = Cache<ExperimentCacheKey, Arc<CachedExperiment>>;
+
+/// Parsed, evaluation-ready view of an experiment.
+///
+/// Stored in the cache so the hot path doesn't re-parse the variants/segments
+/// JSON on every evaluate. Segments are pre-sorted by `priority` ascending.
+pub struct CachedExperiment {
+    pub experiment_id: String,
+    pub status: ExperimentStatus,
+    pub variants: Vec<Variant>,
+    pub segments: Vec<Segment>,
+}
 
 pub struct ExperimentsDB {
     pub pool: SqlitePool,
+    pub experiment_cache: ExperimentCache,
+}
+
+impl ExperimentsDB {
+    pub fn new(pool: SqlitePool) -> Self {
+        let experiment_cache = Cache::builder()
+            .max_capacity(10_000)
+            .time_to_live(Duration::from_secs(300))
+            .build();
+        Self { pool, experiment_cache }
+    }
 }
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
@@ -37,7 +66,7 @@ pub struct ApiKeyRow {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Serialize, Deserialize, sqlx::FromRow, Clone)]
 pub struct ExperimentRow {
     pub experiment_id: String,
     pub key: String,
@@ -51,54 +80,4 @@ pub struct ExperimentRow {
     pub created_at: i64,
     pub updated_at: i64,
     pub company_id: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Variant {
-    pub key: String,
-    pub is_control: bool,
-    #[serde(default = "default_attachment")]
-    pub attachment: serde_json::Value,
-}
-
-fn default_attachment() -> serde_json::Value {
-    serde_json::json!({})
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Segment {
-    pub rank: i32,
-    pub rollout_percent: u32,
-    #[serde(default)]
-    pub constraints: Vec<Constraint>,
-    pub distributions: Vec<Distribution>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ConstraintOperator {
-    Eq,
-    Neq,
-    Gt,
-    Gte,
-    Lt,
-    Lte,
-    In,
-    NotIn,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Constraint {
-    pub property: String,
-    pub operator: ConstraintOperator,
-    pub value: serde_json::Value,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Distribution {
-    pub variant_key: String,
-    pub percent: u32,
 }

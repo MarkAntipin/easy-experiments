@@ -5,7 +5,7 @@ use crate::errors::CustomError;
 use crate::models::{
     AuthenticatedUser, CreateExperimentRequest, CreateExperimentResponse, ExperimentsDB,
 };
-use crate::repository::db_create_experiment;
+use crate::services::experiment;
 use crate::validation::ValidatedJson;
 
 pub async fn create_experiment(
@@ -13,18 +13,7 @@ pub async fn create_experiment(
     user: web::ReqData<AuthenticatedUser>,
     payload: ValidatedJson<CreateExperimentRequest>,
 ) -> Result<HttpResponse, CustomError> {
-    let request = payload.into_inner();
-
-    let id = db_create_experiment(
-        &db,
-        &request.key,
-        request.description.as_deref(),
-        &request.primary_metric,
-        &request.variants,
-        &request.segments,
-        &user.company_id,
-    )
-    .await?;
+    let id = experiment::create_experiment(&db, &user.company_id, payload.into_inner()).await?;
 
     Ok(HttpResponse::Created().json(CreateExperimentResponse {
         experiment_id: id,

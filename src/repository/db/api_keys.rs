@@ -19,8 +19,17 @@ pub async fn db_create_api_key(
     let now = Utc::now().timestamp_millis();
 
     sqlx::query(
-        "INSERT INTO api_keys (api_key_id, company_id, name, key_hash, key_prefix, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "
+        INSERT INTO api_keys (
+            api_key_id,
+            company_id,
+            name,
+            key_hash,
+            key_prefix,
+            created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ",
     )
     .bind(&api_key_id)
     .bind(new.company_id)
@@ -40,9 +49,17 @@ pub async fn db_find_api_key_by_hash(
     key_hash: &str,
 ) -> Result<Option<ApiKeyRow>, CustomError> {
     sqlx::query_as(
-        "SELECT api_key_id, company_id, name, key_hash, key_prefix, created_at
-         FROM api_keys
-         WHERE key_hash = $1",
+        "
+        SELECT
+            api_key_id,
+            company_id,
+            name,
+            key_hash,
+            key_prefix,
+            created_at
+        FROM api_keys
+        WHERE key_hash = $1
+        ",
     )
     .bind(key_hash)
     .fetch_optional(&db.pool)
@@ -55,8 +72,18 @@ pub async fn db_list_api_keys(
     company_id: &str,
 ) -> Result<Vec<ApiKeyRow>, CustomError> {
     sqlx::query_as(
-        "SELECT api_key_id, company_id, name, key_hash, key_prefix, created_at
-         FROM api_keys WHERE company_id = $1 ORDER BY created_at DESC",
+        "
+        SELECT
+            api_key_id,
+            company_id,
+            name,
+            key_hash,
+            key_prefix,
+            created_at
+        FROM api_keys
+        WHERE company_id = $1
+        ORDER BY created_at DESC
+        ",
     )
     .bind(company_id)
     .fetch_all(&db.pool)
@@ -70,7 +97,11 @@ pub async fn db_revoke_api_key(
     company_id: &str,
 ) -> Result<bool, CustomError> {
     let result = sqlx::query(
-        "DELETE FROM api_keys WHERE api_key_id = $1 AND company_id = $2",
+        "
+        DELETE FROM api_keys
+        WHERE api_key_id = $1
+          AND company_id = $2
+        ",
     )
     .bind(api_key_id)
     .bind(company_id)

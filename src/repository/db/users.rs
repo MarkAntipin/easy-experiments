@@ -9,8 +9,19 @@ pub async fn db_find_user_by_google_sub(
     google_sub: &str,
 ) -> Result<Option<(UserRow, CompanyRow)>, CustomError> {
     let user: Option<UserRow> = sqlx::query_as(
-        "SELECT user_id, company_id, email, name, picture_url, google_sub, created_at, updated_at
-         FROM users WHERE google_sub = $1",
+        "
+        SELECT
+            user_id,
+            company_id,
+            email,
+            name,
+            picture_url,
+            google_sub,
+            created_at,
+            updated_at
+        FROM users
+        WHERE google_sub = $1
+        ",
     )
     .bind(google_sub)
     .fetch_optional(&db.pool)
@@ -20,7 +31,15 @@ pub async fn db_find_user_by_google_sub(
     match user {
         Some(u) => {
             let company: CompanyRow = sqlx::query_as(
-                "SELECT company_id, name, created_at, updated_at FROM companies WHERE company_id = $1",
+                "
+                SELECT
+                    company_id,
+                    name,
+                    created_at,
+                    updated_at
+                FROM companies
+                WHERE company_id = $1
+                ",
             )
             .bind(&u.company_id)
             .fetch_one(&db.pool)
@@ -41,7 +60,14 @@ pub async fn db_update_user_profile(
     let now = Utc::now().timestamp_millis();
 
     sqlx::query(
-        "UPDATE users SET name = $1, picture_url = $2, updated_at = $3 WHERE user_id = $4",
+        "
+        UPDATE users
+        SET
+            name = $1,
+            picture_url = $2,
+            updated_at = $3
+        WHERE user_id = $4
+        ",
     )
     .bind(name)
     .bind(picture_url)
@@ -74,7 +100,15 @@ pub async fn db_create_user_and_company(
     let mut tx = db.pool.begin().await.map_err(CustomError::from)?;
 
     sqlx::query(
-        "INSERT INTO companies (company_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+        "
+        INSERT INTO companies (
+            company_id,
+            name,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3, $4)
+        ",
     )
     .bind(&company_id)
     .bind(&company_name)
@@ -85,8 +119,19 @@ pub async fn db_create_user_and_company(
     .map_err(CustomError::from)?;
 
     sqlx::query(
-        "INSERT INTO users (user_id, company_id, email, name, picture_url, google_sub, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "
+        INSERT INTO users (
+            user_id,
+            company_id,
+            email,
+            name,
+            picture_url,
+            google_sub,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ",
     )
     .bind(&user_id)
     .bind(&company_id)

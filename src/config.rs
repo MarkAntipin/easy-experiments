@@ -17,6 +17,12 @@ pub struct Config {
 
     pub duckdb_path: String,
 
+    pub event_queue_capacity: usize,
+
+    pub event_batch_capacity: usize,
+
+    pub event_flush_interval_ms: u64,
+
     pub cors_allowed_origins: Option<String>,
 }
 
@@ -37,6 +43,9 @@ pub fn get_config() -> Result<Config, config::ConfigError> {
         .set_default("application_port", 18200)?
         .set_default("sqlite_url", "sqlite://easy-experiments.db")?
         .set_default("duckdb_path", "easy-experiments.duckdb")?
+        .set_default("event_queue_capacity", 10_000)?
+        .set_default("event_batch_capacity", 1_000)?
+        .set_default("event_flush_interval_ms", 1_000)?
         .set_default(
             "google_jwks_url",
             crate::services::google_auth::DEFAULT_GOOGLE_JWKS_URL,

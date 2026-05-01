@@ -1,4 +1,5 @@
 use std::net::TcpListener;
+use std::sync::Arc;
 
 use actix_web::{
     Result,
@@ -10,6 +11,7 @@ use actix_web::{
 use actix_cors::Cors;
 
 use crate::{
+    analytics::EventSink,
     errors::CustomError,
     models::{ExperimentsDB, JwtSecret},
     repository::db_find_api_key_by_hash,
@@ -119,15 +121,16 @@ pub fn run(
     jwt_secret: String,
     google_verifier: GoogleTokenVerifier,
     cors_allowed_origins: Vec<String>,
+    event_sink: Arc<dyn EventSink>,
 ) -> Result<Server, std::io::Error> {
     let db = web::Data::new(db);
     let jwt_secret = web::Data::new(JwtSecret(jwt_secret));
     let google_verifier = web::Data::new(google_verifier);
+    let event_sink: web::Data<dyn EventSink> = web::Data::from(event_sink);
 
     let server = HttpServer::new(move || {
         let mut cors = Cors::default()
             .allowed_methods(vec!["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
-            .allowed_headers(vec!["Authorization", "Content-Type", "X-Api-Key"])
             .max_age(3600);
         for origin in &cors_allowed_origins {
             cors = cors.allowed_origin(origin);
@@ -173,6 +176,7 @@ pub fn run(
             .app_data(db.clone())
             .app_data(jwt_secret.clone())
             .app_data(google_verifier.clone())
+            .app_data(event_sink.clone())
             .configure(json_error_handler)
     })
     .listen(listener)?

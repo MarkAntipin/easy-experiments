@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::errors::CustomError;
-use crate::models::db::{ConstraintOperator, Segment, Variant};
+use crate::models::domain::{ConstraintOperator, Segment, Variant};
 use crate::validation::Validate;
 
 fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -18,13 +18,15 @@ const MAX_KEY_LENGTH: usize = 256;
 const MAX_DESCRIPTION_LENGTH: usize = 4096;
 const MAX_PRIMARY_METRIC_LENGTH: usize = 256;
 const MAX_VARIANT_KEY_LENGTH: usize = 256;
-const MAX_VARIANT_ATTACHMENT_BYTES: usize = 16384;
+const MAX_VARIANT_CONFIG_BYTES: usize = 16384;
 const MAX_CONSTRAINT_PROPERTY_LENGTH: usize = 256;
 const MAX_CONSTRAINT_VALUE_BYTES: usize = 4096;
 const MAX_VARIANTS: usize = 64;
 const MAX_SEGMENTS: usize = 64;
 const MAX_DISTRIBUTIONS_PER_SEGMENT: usize = 64;
 const MAX_CONSTRAINTS_PER_SEGMENT: usize = 64;
+const MAX_ENTITY_ID_LENGTH: usize = 256;
+const MAX_EVALUATE_PROPERTIES_BYTES: usize = 16384;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -173,15 +175,15 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
                 "Duplicate variant key '{}'", variant.key
             )));
         }
-        let attachment_bytes = serde_json::to_vec(&variant.attachment)
+        let config_bytes = serde_json::to_vec(&variant.config)
             .map_err(|e| {
-                CustomError::InternalError(format!("Failed to serialize attachment: {}", e))
+                CustomError::InternalError(format!("Failed to serialize config: {}", e))
             })?
             .len();
-        if attachment_bytes > MAX_VARIANT_ATTACHMENT_BYTES {
+        if config_bytes > MAX_VARIANT_CONFIG_BYTES {
             return Err(CustomError::ValidationError(format!(
-                "Variant attachment size should be less than {} bytes",
-                MAX_VARIANT_ATTACHMENT_BYTES
+                "Variant config size should be less than {} bytes",
+                MAX_VARIANT_CONFIG_BYTES
             )));
         }
         if variant.is_control {
@@ -208,16 +210,16 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
 
     let variant_keys: HashSet<&str> = variants.iter().map(|v| v.key.as_str()).collect();
 
-    let mut seen_ranks = HashSet::with_capacity(segments.len());
+    let mut seen_priorities = HashSet::with_capacity(segments.len());
     for segment in segments {
-        if segment.rank < 0 {
+        if segment.priority < 0 {
             return Err(CustomError::ValidationError(
-                "Segment rank must be non-negative".into(),
+                "Segment priority must be non-negative".into(),
             ));
         }
-        if !seen_ranks.insert(segment.rank) {
+        if !seen_priorities.insert(segment.priority) {
             return Err(CustomError::ValidationError(format!(
-                "Duplicate segment rank '{}'", segment.rank
+                "Duplicate segment priority '{}'", segment.priority
             )));
         }
         if segment.rollout_percent > 100 {
@@ -385,9 +387,389 @@ impl Validate for EvaluateRequest {
         if self.experiment_key.is_empty() {
             return Err(CustomError::ValidationError("Experiment key should not be empty".into()));
         }
+        if self.experiment_key.len() > MAX_KEY_LENGTH {
+            return Err(CustomError::ValidationError(format!(
+                "Experiment key length should be less than {} bytes", MAX_KEY_LENGTH
+            )));
+        }
         if self.entity_id.is_empty() {
             return Err(CustomError::ValidationError("Entity ID should not be empty".into()));
         }
+        if self.entity_id.len() > MAX_ENTITY_ID_LENGTH {
+            return Err(CustomError::ValidationError(format!(
+                "Entity ID length should be less than {} bytes", MAX_ENTITY_ID_LENGTH
+            )));
+        }
+        // Constraints look up properties as `properties.get(name)`; that only
+        // makes sense when properties is an object (or null = no properties).
+        // Reject arrays/strings/etc here so non-object inputs don't silently
+        // make NEQ/NOT_IN constraints pass for every property.
+        if !self.properties.is_null() && !self.properties.is_object() {
+            return Err(CustomError::ValidationError(
+                "Properties must be a JSON object".into(),
+            ));
+        }
+        if !self.properties.is_null() {
+            let props_bytes = serde_json::to_vec(&self.properties)
+                .map_err(|e| {
+                    CustomError::InternalError(format!("Failed to serialize properties: {}", e))
+                })?
+                .len();
+            if props_bytes > MAX_EVALUATE_PROPERTIES_BYTES {
+                return Err(CustomError::ValidationError(format!(
+                    "Properties size should be less than {} bytes",
+                    MAX_EVALUATE_PROPERTIES_BYTES
+                )));
+            }
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::domain::{Constraint, Distribution};
+    use serde_json::json;
+
+    fn assert_validation_err(result: Result<(), CustomError>, needle: &str) {
+        match result {
+            Err(CustomError::ValidationError(msg)) => assert!(
+                msg.contains(needle),
+                "expected validation error containing {needle:?}, got {msg:?}"
+            ),
+            other => panic!("expected ValidationError({needle:?}), got {other:?}"),
+        }
+    }
+
+    fn variant(key: &str, is_control: bool) -> Variant {
+        Variant {
+            key: key.into(),
+            is_control,
+            config: json!({}),
+        }
+    }
+
+    fn distribution(key: &str, percent: u32) -> Distribution {
+        Distribution { variant_key: key.into(), percent }
+    }
+
+    fn simple_segment() -> Segment {
+        Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![],
+            distributions: vec![
+                distribution("control", 50),
+                distribution("treatment", 50),
+            ],
+        }
+    }
+
+    fn simple_variants() -> Vec<Variant> {
+        vec![variant("control", true), variant("treatment", false)]
+    }
+
+    // ---- validate_key ----
+
+    #[test]
+    fn validate_key_ok() {
+        assert!(validate_key("abc").is_ok());
+    }
+
+    #[test]
+    fn validate_key_rejects_empty_whitespace_and_overlong() {
+        assert_validation_err(validate_key(""), "empty");
+        assert_validation_err(validate_key(" abc"), "whitespace");
+        assert_validation_err(validate_key("abc "), "whitespace");
+        let too_long = "a".repeat(MAX_KEY_LENGTH + 1);
+        assert_validation_err(validate_key(&too_long), "Key length");
+        assert!(validate_key(&"a".repeat(MAX_KEY_LENGTH)).is_ok());
+    }
+
+    // ---- validate_primary_metric ----
+
+    #[test]
+    fn validate_primary_metric_ok_and_errors() {
+        assert!(validate_primary_metric("clicks").is_ok());
+        assert_validation_err(validate_primary_metric(""), "empty");
+        assert_validation_err(validate_primary_metric(" clicks"), "whitespace");
+        assert_validation_err(
+            validate_primary_metric(&"m".repeat(MAX_PRIMARY_METRIC_LENGTH + 1)),
+            "Primary metric length",
+        );
+    }
+
+    // ---- validate_description ----
+
+    #[test]
+    fn validate_description_none_is_ok() {
+        assert!(validate_description(None).is_ok());
+    }
+
+    #[test]
+    fn validate_description_errors() {
+        assert_validation_err(validate_description(Some("")), "empty");
+        assert_validation_err(validate_description(Some(" x")), "whitespace");
+        assert_validation_err(validate_description(Some("x ")), "whitespace");
+        let too_long = "d".repeat(MAX_DESCRIPTION_LENGTH + 1);
+        assert_validation_err(validate_description(Some(&too_long)), "Description length");
+        assert!(validate_description(Some("ok")).is_ok());
+    }
+
+    // ---- validate_variants ----
+
+    #[test]
+    fn validate_variants_happy_path() {
+        assert!(validate_variants(&simple_variants()).is_ok());
+    }
+
+    #[test]
+    fn validate_variants_requires_non_empty() {
+        assert_validation_err(validate_variants(&[]), "empty");
+    }
+
+    #[test]
+    fn validate_variants_requires_exactly_one_control() {
+        // zero controls
+        let v = vec![variant("a", false), variant("b", false)];
+        assert_validation_err(validate_variants(&v), "Exactly one");
+        // two controls
+        let v = vec![variant("a", true), variant("b", true)];
+        assert_validation_err(validate_variants(&v), "Exactly one");
+    }
+
+    #[test]
+    fn validate_variants_rejects_duplicate_keys() {
+        let v = vec![variant("dup", true), variant("dup", false)];
+        assert_validation_err(validate_variants(&v), "Duplicate variant key");
+    }
+
+    #[test]
+    fn validate_variants_rejects_bad_key_shape() {
+        let v = vec![variant("", true), variant("b", false)];
+        assert_validation_err(validate_variants(&v), "empty");
+        let v = vec![variant(" a", true), variant("b", false)];
+        assert_validation_err(validate_variants(&v), "whitespace");
+        let long = "k".repeat(MAX_VARIANT_KEY_LENGTH + 1);
+        let v = vec![variant(&long, true), variant("b", false)];
+        assert_validation_err(validate_variants(&v), "Variant key length");
+    }
+
+    #[test]
+    fn validate_variants_rejects_too_many() {
+        let mut v: Vec<Variant> = (0..=MAX_VARIANTS)
+            .map(|i| variant(&format!("v{i}"), false))
+            .collect();
+        v[0].is_control = true;
+        assert_validation_err(validate_variants(&v), "at most");
+    }
+
+    #[test]
+    fn validate_variants_rejects_oversized_config() {
+        let mut v = simple_variants();
+        v[0].config = json!({ "blob": "x".repeat(MAX_VARIANT_CONFIG_BYTES) });
+        assert_validation_err(validate_variants(&v), "config size");
+    }
+
+    // ---- validate_segments ----
+
+    #[test]
+    fn validate_segments_happy_path() {
+        let variants = simple_variants();
+        assert!(validate_segments(&[simple_segment()], &variants).is_ok());
+    }
+
+    #[test]
+    fn validate_segments_requires_non_empty() {
+        let variants = simple_variants();
+        assert_validation_err(validate_segments(&[], &variants), "at least one segment");
+    }
+
+    #[test]
+    fn validate_segments_distributions_must_sum_to_100() {
+        let variants = simple_variants();
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![],
+            distributions: vec![distribution("control", 50), distribution("treatment", 40)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "sum to 100");
+    }
+
+    #[test]
+    fn validate_segments_rejects_unknown_variant_reference() {
+        let variants = simple_variants();
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![],
+            distributions: vec![distribution("ghost", 100)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "unknown variant");
+    }
+
+    #[test]
+    fn validate_segments_rejects_duplicate_distribution_keys() {
+        let variants = simple_variants();
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![],
+            distributions: vec![distribution("control", 50), distribution("control", 50)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "Duplicate distribution");
+    }
+
+    #[test]
+    fn validate_segments_rejects_duplicate_priorities() {
+        let variants = simple_variants();
+        let segs = vec![simple_segment(), simple_segment()]; // both priority 0
+        assert_validation_err(validate_segments(&segs, &variants), "Duplicate segment priority");
+    }
+
+    #[test]
+    fn validate_segments_rejects_negative_priority_and_bad_rollout() {
+        let variants = simple_variants();
+        let seg = Segment { priority: -1, ..simple_segment() };
+        assert_validation_err(validate_segments(&[seg], &variants), "non-negative");
+
+        let seg = Segment { rollout_percent: 101, ..simple_segment() };
+        assert_validation_err(validate_segments(&[seg], &variants), "between 0 and 100");
+    }
+
+    #[test]
+    fn validate_segments_rejects_bad_distribution_percent() {
+        let variants = simple_variants();
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![],
+            distributions: vec![distribution("control", 101)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "between 0 and 100");
+    }
+
+    #[test]
+    fn validate_segments_validates_constraint_property_shape() {
+        let variants = simple_variants();
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![Constraint {
+                property: "".into(),
+                operator: ConstraintOperator::Eq,
+                value: json!("x"),
+            }],
+            distributions: vec![distribution("control", 50), distribution("treatment", 50)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "property must not be empty");
+
+        let seg = Segment {
+            priority: 0,
+            rollout_percent: 100,
+            constraints: vec![Constraint {
+                property: "p".repeat(MAX_CONSTRAINT_PROPERTY_LENGTH + 1),
+                operator: ConstraintOperator::Eq,
+                value: json!("x"),
+            }],
+            distributions: vec![distribution("control", 50), distribution("treatment", 50)],
+        };
+        assert_validation_err(validate_segments(&[seg], &variants), "property length");
+    }
+
+    // ---- validate_constraint_value_shape ----
+
+    #[test]
+    fn constraint_eq_neq_accepts_primitives_rejects_compound() {
+        for op in [ConstraintOperator::Eq, ConstraintOperator::Neq] {
+            assert!(validate_constraint_value_shape(op, &json!("s")).is_ok());
+            assert!(validate_constraint_value_shape(op, &json!(1)).is_ok());
+            assert!(validate_constraint_value_shape(op, &json!(true)).is_ok());
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!([1, 2])),
+                "string, number, or boolean",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!({"a": 1})),
+                "string, number, or boolean",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!(null)),
+                "string, number, or boolean",
+            );
+        }
+    }
+
+    #[test]
+    fn constraint_numeric_ops_require_number() {
+        for op in [
+            ConstraintOperator::Gt,
+            ConstraintOperator::Gte,
+            ConstraintOperator::Lt,
+            ConstraintOperator::Lte,
+        ] {
+            assert!(validate_constraint_value_shape(op, &json!(1)).is_ok());
+            assert!(validate_constraint_value_shape(op, &json!(1.5)).is_ok());
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!("1")),
+                "must be a number",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!(true)),
+                "must be a number",
+            );
+        }
+    }
+
+    #[test]
+    fn constraint_in_notin_require_non_empty_primitive_array() {
+        for op in [ConstraintOperator::In, ConstraintOperator::NotIn] {
+            assert!(validate_constraint_value_shape(op, &json!([1, "a", true])).is_ok());
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!("a")),
+                "must be an array",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!([])),
+                "non-empty array",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!([1, {"x": 1}])),
+                "array elements must be",
+            );
+            assert_validation_err(
+                validate_constraint_value_shape(op, &json!([1, null])),
+                "array elements must be",
+            );
+        }
+    }
+
+    // ---- EvaluateRequest::validate ----
+
+    fn evaluate_request(properties: serde_json::Value) -> EvaluateRequest {
+        EvaluateRequest {
+            experiment_key: "exp".into(),
+            entity_id: "user-1".into(),
+            properties,
+        }
+    }
+
+    #[test]
+    fn evaluate_request_accepts_null_or_object_properties() {
+        assert!(evaluate_request(json!(null)).validate().is_ok());
+        assert!(evaluate_request(json!({})).validate().is_ok());
+        assert!(evaluate_request(json!({"country": "US", "tier": 1})).validate().is_ok());
+    }
+
+    #[test]
+    fn evaluate_request_rejects_non_object_properties() {
+        for v in [json!("foo"), json!(42), json!(true), json!([1, 2])] {
+            assert_validation_err(
+                evaluate_request(v).validate(),
+                "Properties must be a JSON object",
+            );
+        }
     }
 }

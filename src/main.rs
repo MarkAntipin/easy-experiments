@@ -1,11 +1,16 @@
 use std::net::TcpListener;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use env_logger::Env;
+use easy_experiments::analytics::{spawn_writer, EventSink, ExposureEvent, MpscEventSink, WriterConfig};
 use easy_experiments::config::get_config;
 use easy_experiments::models::ExperimentsDB;
 use easy_experiments::services::google_auth::GoogleTokenVerifier;
 use easy_experiments::startup::run;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqlitePool, SqliteConnectOptions, SqliteJournalMode};
+use tokio::sync::mpsc;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -25,9 +30,7 @@ async fn main() -> std::io::Result<()> {
 
     MIGRATOR.run(&pool).await.expect("Migration failed");
 
-    let experiments_db = ExperimentsDB {
-        pool
-    };
+    let experiments_db = ExperimentsDB::new(pool);
 
     let address = format!("0.0.0.0:{}", config.application_port);
     let listener = TcpListener::bind(address)?;
@@ -50,12 +53,32 @@ async fn main() -> std::io::Result<()> {
         })
         .unwrap_or_default();
 
+    let (event_tx, event_rx) = mpsc::channel::<ExposureEvent>(config.event_queue_capacity);
+    let writer_handle = spawn_writer(
+        event_rx,
+        PathBuf::from(&config.duckdb_path),
+        WriterConfig {
+            batch_capacity: config.event_batch_capacity,
+            flush_interval: Duration::from_millis(config.event_flush_interval_ms),
+        },
+    );
+    let event_sink: Arc<dyn EventSink> = Arc::new(MpscEventSink::new(event_tx));
+
     run(
         listener,
         experiments_db,
         jwt_secret,
         google_verifier,
         cors_allowed_origins,
+        event_sink,
     )?
-    .await
+    .await?;
+
+    // Server has stopped accepting connections; the App and its sink Arc are
+    // dropped, which closes the channel. Wait for the writer to drain.
+    if let Err(e) = writer_handle.await {
+        log::warn!("analytics writer task did not exit cleanly: {:?}", e);
+    }
+
+    Ok(())
 }
