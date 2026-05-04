@@ -23,6 +23,10 @@ pub struct Config {
 
     pub event_flush_interval_ms: u64,
 
+    pub exposure_dedup_capacity: u64,
+
+    pub exposure_dedup_ttl_secs: u64,
+
     pub cors_allowed_origins: Option<String>,
 }
 
@@ -46,6 +50,8 @@ pub fn get_config() -> Result<Config, config::ConfigError> {
         .set_default("event_queue_capacity", 10_000)?
         .set_default("event_batch_capacity", 1_000)?
         .set_default("event_flush_interval_ms", 1_000)?
+        .set_default("exposure_dedup_capacity", 1_000_000)?
+        .set_default("exposure_dedup_ttl_secs", 3_600)?
         .set_default(
             "google_jwks_url",
             crate::services::google_auth::DEFAULT_GOOGLE_JWKS_URL,

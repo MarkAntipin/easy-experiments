@@ -1,22 +1,25 @@
-use chrono::Utc;
+use std::sync::Arc;
 
-use crate::analytics::{EventSink, ExposureEvent};
+use chrono::Utc;
+use serde_json::Value;
+
 use crate::errors::CustomError;
 use crate::models::{
     CachedExperiment, Constraint, ConstraintOperator, Distribution, EvaluateRequest,
-    ExperimentStatus, ExperimentsDB,
+    ExperimentStatus, ExperimentsDB, ExposureEvent,
 };
 use crate::repository::db_get_experiment_by_key;
+use crate::services::exposure::EventSink;
 
 pub struct VariantAssignment {
     pub variant_key: String,
-    pub config: Option<serde_json::Value>,
+    pub config: Option<Arc<Value>>,
 }
 
 pub struct EvaluationResult {
     pub experiment_key: String,
     pub variant_key: Option<String>,
-    pub config: Option<serde_json::Value>,
+    pub config: Option<Arc<Value>>,
 }
 
 pub async fn evaluate(
@@ -75,11 +78,7 @@ pub fn assign_variant(
         if let Some(variant_key) =
             pick_variant(&segment.distributions, &experiment.experiment_id, entity_id)
         {
-            let config = experiment
-                .variants
-                .iter()
-                .find(|v| v.key == variant_key)
-                .map(|v| v.config.clone());
+            let config = experiment.variant_configs.get(&variant_key).cloned();
             return Some(VariantAssignment { variant_key, config });
         }
     }
@@ -91,32 +90,52 @@ fn matches_constraints(properties: &serde_json::Value, constraints: &[Constraint
     for constraint in constraints {
         let prop_value = properties.get(&constraint.property);
         let matched = match constraint.operator {
-            ConstraintOperator::Eq => prop_value == Some(&constraint.value),
-            ConstraintOperator::Neq => prop_value != Some(&constraint.value),
+            ConstraintOperator::Eq => match prop_value {
+                Some(v) => values_eq(v, &constraint.value),
+                None => false,
+            },
+            ConstraintOperator::Neq => match prop_value {
+                Some(v) => !values_eq(v, &constraint.value),
+                None => true,
+            },
             ConstraintOperator::Gt => compare_values(prop_value, &constraint.value, |a, b| a > b),
             ConstraintOperator::Gte => compare_values(prop_value, &constraint.value, |a, b| a >= b),
             ConstraintOperator::Lt => compare_values(prop_value, &constraint.value, |a, b| a < b),
             ConstraintOperator::Lte => compare_values(prop_value, &constraint.value, |a, b| a <= b),
-            ConstraintOperator::In => {
-                if let (Some(val), Some(arr)) = (prop_value, constraint.value.as_array()) {
-                    arr.contains(val)
-                } else {
-                    false
-                }
-            }
-            ConstraintOperator::NotIn => {
-                if let (Some(val), Some(arr)) = (prop_value, constraint.value.as_array()) {
-                    !arr.contains(val)
-                } else {
-                    true
-                }
-            }
+            ConstraintOperator::In => match (prop_value, constraint.value.as_array()) {
+                (Some(val), Some(arr)) => arr.iter().any(|x| values_eq(x, val)),
+                _ => false,
+            },
+            ConstraintOperator::NotIn => match (prop_value, constraint.value.as_array()) {
+                (Some(val), Some(arr)) => !arr.iter().any(|x| values_eq(x, val)),
+                _ => true,
+            },
         };
         if !matched {
             return false;
         }
     }
     true
+}
+
+/// Equality that unifies `serde_json::Number` variants. Plain `==` on
+/// `Value::Number` returns false across `PosInt` / `NegInt` / `Float`, so a
+/// client property of `30` would not match a stored constraint value of
+/// `30.0` (or vice versa). For other types this falls back to `Value::eq`.
+fn values_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => {
+            if x == y {
+                return true;
+            }
+            match (x.as_f64(), y.as_f64()) {
+                (Some(xf), Some(yf)) => xf == yf,
+                _ => false,
+            }
+        }
+        _ => a == b,
+    }
 }
 
 fn compare_values(
@@ -164,6 +183,7 @@ fn pick_variant(
 /// FNV-1a is stable across compiler/library versions (unlike `DefaultHasher`)
 /// and has good enough avalanche for non-adversarial bucketing — important so
 /// the rollout salt and variant salt produce statistically independent buckets.
+/// TODO: rewrite
 fn hash_to_bucket(experiment_id: &str, entity_id: &str, salt: &str) -> u32 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -304,5 +324,102 @@ mod tests {
             value: serde_json::json!(18),
         }];
         assert!(!matches_constraints(&props, &cs));
+    }
+
+    #[test]
+    fn matches_constraints_eq_unifies_int_and_float() {
+        // serde_json's Number doesn't compare across variants, so the raw
+        // PartialEq would say `30 != 30.0`. The constraint check must.
+        let cases = [
+            (serde_json::json!({"age": 30}),    serde_json::json!(30.0)),
+            (serde_json::json!({"age": 30.0}),  serde_json::json!(30)),
+            (serde_json::json!({"age": 0}),     serde_json::json!(0.0)),
+            (serde_json::json!({"age": -1}),    serde_json::json!(-1.0)),
+        ];
+        for (props, value) in cases {
+            let cs = vec![Constraint {
+                property: "age".into(),
+                operator: ConstraintOperator::Eq,
+                value,
+            }];
+            assert!(matches_constraints(&props, &cs), "eq should match for {:?}", props);
+        }
+
+        // Different numbers still don't match.
+        let props = serde_json::json!({"age": 30});
+        let cs = vec![Constraint {
+            property: "age".into(),
+            operator: ConstraintOperator::Eq,
+            value: serde_json::json!(31.0),
+        }];
+        assert!(!matches_constraints(&props, &cs));
+    }
+
+    #[test]
+    fn matches_constraints_neq_unifies_int_and_float() {
+        // 30 vs 30.0 are equal → NEQ should fail.
+        let props = serde_json::json!({"age": 30});
+        let cs = vec![Constraint {
+            property: "age".into(),
+            operator: ConstraintOperator::Neq,
+            value: serde_json::json!(30.0),
+        }];
+        assert!(!matches_constraints(&props, &cs));
+
+        // Genuinely different numbers → NEQ passes.
+        let cs = vec![Constraint {
+            property: "age".into(),
+            operator: ConstraintOperator::Neq,
+            value: serde_json::json!(31.0),
+        }];
+        assert!(matches_constraints(&props, &cs));
+
+        // Property absent → NEQ passes (preserves prior behavior).
+        let props = serde_json::json!({});
+        let cs = vec![Constraint {
+            property: "age".into(),
+            operator: ConstraintOperator::Neq,
+            value: serde_json::json!(30),
+        }];
+        assert!(matches_constraints(&props, &cs));
+    }
+
+    #[test]
+    fn matches_constraints_in_unifies_int_and_float() {
+        // Integer property in float-typed array.
+        let props = serde_json::json!({"tier": 2});
+        let cs = vec![Constraint {
+            property: "tier".into(),
+            operator: ConstraintOperator::In,
+            value: serde_json::json!([1.0, 2.0, 3.0]),
+        }];
+        assert!(matches_constraints(&props, &cs));
+
+        // Float property in integer-typed array.
+        let props = serde_json::json!({"tier": 2.0});
+        let cs = vec![Constraint {
+            property: "tier".into(),
+            operator: ConstraintOperator::In,
+            value: serde_json::json!([1, 2, 3]),
+        }];
+        assert!(matches_constraints(&props, &cs));
+
+        // NOT_IN mirrors IN.
+        let props = serde_json::json!({"tier": 4});
+        let cs = vec![Constraint {
+            property: "tier".into(),
+            operator: ConstraintOperator::NotIn,
+            value: serde_json::json!([1.0, 2.0, 3.0]),
+        }];
+        assert!(matches_constraints(&props, &cs));
+    }
+
+    #[test]
+    fn values_eq_strings_and_bools_unaffected() {
+        // Sanity: non-numeric paths still go through Value::eq.
+        assert!(values_eq(&serde_json::json!("a"), &serde_json::json!("a")));
+        assert!(!values_eq(&serde_json::json!("a"), &serde_json::json!("b")));
+        assert!(values_eq(&serde_json::json!(true), &serde_json::json!(true)));
+        assert!(!values_eq(&serde_json::json!(true), &serde_json::json!(1)));
     }
 }

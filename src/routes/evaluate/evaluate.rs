@@ -1,10 +1,10 @@
 use actix_web::web;
 use actix_web::HttpResponse;
 
-use crate::analytics::EventSink;
 use crate::errors::CustomError;
 use crate::models::{AuthenticatedApiKey, EvaluateRequest, EvaluateResponse, ExperimentsDB};
 use crate::services::evaluation;
+use crate::services::exposure::EventSink;
 use crate::validation::ValidatedJson;
 
 pub async fn evaluate(

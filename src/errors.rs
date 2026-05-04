@@ -4,7 +4,7 @@ use sqlx;
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 
-#[derive(Debug, Display)]
+#[derive(Debug, Display, Clone)]
 pub enum CustomError {
     SerializeError(String),
     ValidationError(String),

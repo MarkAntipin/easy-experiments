@@ -2,6 +2,8 @@ use uuid::Uuid;
 
 pub const EXPOSURE_SCHEMA_VERSION: u16 = 1;
 
+// TODO: review schema here. Do I need those company_id, event_id, schema_version?
+// TODO: What do I need for plot display 
 #[derive(Debug, Clone)]
 pub struct ExposureEvent {
     pub event_id: Uuid,

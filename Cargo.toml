@@ -14,7 +14,7 @@ name = "easy-experiments"
 [dependencies]
 actix-web = "4.9.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
-serde = { version = "1.0.216", features = ["derive"] }
+serde = { version = "1.0.216", features = ["derive", "rc"] }
 config = "0.14"
 dotenv = "0.15.0"
 serde_json = "1.0.134"
@@ -31,7 +31,7 @@ reqwest = { version = "0.12.9", features = ["json"] }
 rand = "0.9.2"
 sha2 = "0.10"
 base64 = "0.22"
-moka = { version = "0.12", features = ["future"] }
+moka = { version = "0.12", features = ["future", "sync"] }
 
 [dev-dependencies]
 rsa = "0.9"

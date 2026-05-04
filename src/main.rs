@@ -3,9 +3,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use env_logger::Env;
-use easy_experiments::analytics::{spawn_writer, EventSink, ExposureEvent, MpscEventSink, WriterConfig};
 use easy_experiments::config::get_config;
-use easy_experiments::models::ExperimentsDB;
+use easy_experiments::models::{ExperimentsDB, ExposureEvent};
+use easy_experiments::services::exposure::{
+    spawn_writer, DedupConfig, EventSink, MpscEventSink, WriterConfig,
+};
 use easy_experiments::services::google_auth::GoogleTokenVerifier;
 use easy_experiments::startup::run;
 use sqlx::migrate::Migrator;
@@ -62,7 +64,13 @@ async fn main() -> std::io::Result<()> {
             flush_interval: Duration::from_millis(config.event_flush_interval_ms),
         },
     );
-    let event_sink: Arc<dyn EventSink> = Arc::new(MpscEventSink::new(event_tx));
+    let event_sink: Arc<dyn EventSink> = Arc::new(MpscEventSink::with_dedup_config(
+        event_tx,
+        DedupConfig {
+            max_capacity: config.exposure_dedup_capacity,
+            ttl: Duration::from_secs(config.exposure_dedup_ttl_secs),
+        },
+    ));
 
     run(
         listener,
@@ -77,7 +85,7 @@ async fn main() -> std::io::Result<()> {
     // Server has stopped accepting connections; the App and its sink Arc are
     // dropped, which closes the channel. Wait for the writer to drain.
     if let Err(e) = writer_handle.await {
-        log::warn!("analytics writer task did not exit cleanly: {:?}", e);
+        log::warn!("exposure writer task did not exit cleanly: {:?}", e);
     }
 
     Ok(())

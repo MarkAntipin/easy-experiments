@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::errors::CustomError;
@@ -92,7 +94,7 @@ impl From<ExperimentRow> for ExperimentListItem {
 pub struct EvaluateResponse {
     pub experiment_key: String,
     pub variant_key: Option<String>,
-    pub config: Option<serde_json::Value>,
+    pub config: Option<Arc<serde_json::Value>>,
 }
 
 #[derive(Serialize)]

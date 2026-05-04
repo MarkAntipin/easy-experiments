@@ -18,15 +18,28 @@ const MAX_KEY_LENGTH: usize = 256;
 const MAX_DESCRIPTION_LENGTH: usize = 4096;
 const MAX_PRIMARY_METRIC_LENGTH: usize = 256;
 const MAX_VARIANT_KEY_LENGTH: usize = 256;
-const MAX_VARIANT_CONFIG_BYTES: usize = 16384;
+const MAX_VARIANT_CONFIG_BYTES: usize = 4096;
 const MAX_CONSTRAINT_PROPERTY_LENGTH: usize = 256;
-const MAX_CONSTRAINT_VALUE_BYTES: usize = 4096;
+const MAX_CONSTRAINT_VALUE_BYTES: usize = 1024;
 const MAX_VARIANTS: usize = 64;
 const MAX_SEGMENTS: usize = 64;
 const MAX_DISTRIBUTIONS_PER_SEGMENT: usize = 64;
 const MAX_CONSTRAINTS_PER_SEGMENT: usize = 64;
 const MAX_ENTITY_ID_LENGTH: usize = 256;
-const MAX_EVALUATE_PROPERTIES_BYTES: usize = 16384;
+pub const MAX_IDEMPOTENCY_KEY_LENGTH: usize = 256;
+
+/// Reject control characters and any whitespace in user-supplied identifiers
+/// that get echoed in error messages, stored in DB, or written to logs. Keeps
+/// `\n`, `\r`, `\x1b` (ANSI escapes), NUL, etc. out of `journalctl` output.
+fn validate_safe_identifier(field: &str, value: &str) -> Result<(), CustomError> {
+    if value.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(CustomError::ValidationError(format!(
+            "{} must not contain whitespace or control characters",
+            field
+        )));
+    }
+    Ok(())
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,34 +127,39 @@ fn validate_key(key: &str) -> Result<(), CustomError> {
     if key.is_empty() {
         return Err(CustomError::ValidationError("Key should not be empty".into()));
     }
-    if key != key.trim() {
-        return Err(CustomError::ValidationError(
-            "Key must not have leading or trailing whitespace".into(),
-        ));
-    }
     if key.len() > MAX_KEY_LENGTH {
         return Err(CustomError::ValidationError(format!(
             "Key length should be less than {} bytes", MAX_KEY_LENGTH
         )));
     }
-    Ok(())
+    validate_safe_identifier("Key", key)
+}
+
+pub fn validate_idempotency_key(key: &str) -> Result<(), CustomError> {
+    if key.is_empty() {
+        return Err(CustomError::ValidationError(
+            "Idempotency-Key header must not be empty".into(),
+        ));
+    }
+    if key.len() > MAX_IDEMPOTENCY_KEY_LENGTH {
+        return Err(CustomError::ValidationError(format!(
+            "Idempotency-Key length should be less than {} bytes",
+            MAX_IDEMPOTENCY_KEY_LENGTH
+        )));
+    }
+    validate_safe_identifier("Idempotency-Key", key)
 }
 
 fn validate_primary_metric(primary_metric: &str) -> Result<(), CustomError> {
     if primary_metric.is_empty() {
         return Err(CustomError::ValidationError("Primary metric should not be empty".into()));
     }
-    if primary_metric != primary_metric.trim() {
-        return Err(CustomError::ValidationError(
-            "Primary metric must not have leading or trailing whitespace".into(),
-        ));
-    }
     if primary_metric.len() > MAX_PRIMARY_METRIC_LENGTH {
         return Err(CustomError::ValidationError(format!(
             "Primary metric length should be less than {} bytes", MAX_PRIMARY_METRIC_LENGTH
         )));
     }
-    Ok(())
+    validate_safe_identifier("Primary metric", primary_metric)
 }
 
 fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
@@ -160,16 +178,12 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
         if variant.key.is_empty() {
             return Err(CustomError::ValidationError("Variant key should not be empty".into()));
         }
-        if variant.key != variant.key.trim() {
-            return Err(CustomError::ValidationError(
-                "Variant key must not have leading or trailing whitespace".into(),
-            ));
-        }
         if variant.key.len() > MAX_VARIANT_KEY_LENGTH {
             return Err(CustomError::ValidationError(format!(
                 "Variant key length should be less than {} bytes", MAX_VARIANT_KEY_LENGTH
             )));
         }
+        validate_safe_identifier("Variant key", &variant.key)?;
         if !seen.insert(variant.key.as_str()) {
             return Err(CustomError::ValidationError(format!(
                 "Duplicate variant key '{}'", variant.key
@@ -244,6 +258,7 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
                     MAX_CONSTRAINT_PROPERTY_LENGTH
                 )));
             }
+            validate_safe_identifier("Constraint property", &constraint.property)?;
             if constraint.value.to_string().len() > MAX_CONSTRAINT_VALUE_BYTES {
                 return Err(CustomError::ValidationError(format!(
                     "Constraint value length should be less than {} bytes",
@@ -409,19 +424,8 @@ impl Validate for EvaluateRequest {
                 "Properties must be a JSON object".into(),
             ));
         }
-        if !self.properties.is_null() {
-            let props_bytes = serde_json::to_vec(&self.properties)
-                .map_err(|e| {
-                    CustomError::InternalError(format!("Failed to serialize properties: {}", e))
-                })?
-                .len();
-            if props_bytes > MAX_EVALUATE_PROPERTIES_BYTES {
-                return Err(CustomError::ValidationError(format!(
-                    "Properties size should be less than {} bytes",
-                    MAX_EVALUATE_PROPERTIES_BYTES
-                )));
-            }
-        }
+        // Total payload size is bounded by the per-route `JsonConfig::limit`
+        // in `startup.rs`; no need to re-serialize here just to count bytes.
         Ok(())
     }
 }

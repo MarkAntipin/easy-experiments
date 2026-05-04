@@ -19,8 +19,8 @@ use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use uuid::Uuid;
 
-use easy_experiments::analytics::{EventSink, NoopEventSink};
 use easy_experiments::models::{AuthenticatedUser, ExperimentsDB};
+use easy_experiments::services::exposure::{EventSink, NoopEventSink};
 use easy_experiments::services::google_auth::{GoogleTokenVerifier, DEFAULT_GOOGLE_JWKS_URL};
 use easy_experiments::services::jwt::create_jwt;
 use easy_experiments::startup::run;
@@ -35,6 +35,10 @@ pub struct TestApp {
     client: Client,
 }
 
+// Each `tests/*.rs` compiles `common` separately; helpers used by one binary
+// look "dead" to another. Suppress at the impl level so we don't have to
+// annotate every method.
+#[allow(dead_code)]
 impl TestApp {
     pub async fn spawn() -> Self {
         spawn_app().await
@@ -124,6 +128,59 @@ impl TestApp {
             .send()
             .await
             .expect("POST /admin/v1/experiments/{id}/stop")
+    }
+
+    /// Provision an API key for the test user via the service layer (bypasses
+    /// the admin route to keep the evaluate suite focused on /evaluate).
+    /// Returns the plaintext to put in `X-Api-Key`.
+    pub async fn seed_api_key(&self) -> String {
+        self.seed_api_key_for(&self.user.company_id).await
+    }
+
+    pub async fn seed_api_key_for(&self, company_id: &str) -> String {
+        let db = ExperimentsDB::new(self.pool.clone());
+        easy_experiments::services::api_key::create(
+            &db,
+            company_id,
+            "integration-test-key".to_string(),
+        )
+        .await
+        .expect("create api key")
+        .plaintext
+    }
+
+    pub async fn evaluate(&self, api_key: &str, body: &Value) -> reqwest::Response {
+        self.client
+            .post(self.url("/api/v1/experiments/evaluate"))
+            .header("X-Api-Key", api_key)
+            .json(body)
+            .send()
+            .await
+            .expect("POST /api/v1/experiments/evaluate")
+    }
+
+    /// Create + start an experiment in one call. Returns its experiment_id.
+    pub async fn running_experiment(&self, body: &Value) -> String {
+        let create = self.post_experiment(body).await;
+        assert!(
+            create.status().is_success(),
+            "create_experiment precondition failed: {}",
+            create.status()
+        );
+        let id = create
+            .json::<Value>()
+            .await
+            .unwrap()["experimentId"]
+            .as_str()
+            .expect("experimentId")
+            .to_string();
+        let start = self.start_experiment(&id).await;
+        assert!(
+            start.status().is_success(),
+            "start_experiment precondition failed: {}",
+            start.status()
+        );
+        id
     }
 
     /// A bare reqwest client for crafting requests that need unusual auth etc.

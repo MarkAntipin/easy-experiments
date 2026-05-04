@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Utc;
+use serde_json::Value;
 use sqlx::{self, QueryBuilder, Sqlite};
 use uuid::Uuid;
 
@@ -8,6 +11,21 @@ use crate::errors::CustomError;
 use crate::models::{
     CachedExperiment, ExperimentRow, ExperimentStatus, ExperimentsDB, Segment, Variant,
 };
+
+/// Hard cap on a single experiment lookup. SQLite reads are normally sub-ms;
+/// anything close to this means the connection is wedged and we'd rather
+/// fail the request than tie up an actix worker indefinitely.
+const EXPERIMENT_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Loader-side error for the moka cache. `Missing` is the "not found" signal
+/// (deliberately not cached so we don't pin negative results — that's a
+/// separate concern). `Failed` carries through real errors so callers see
+/// them once the loader resolves.
+#[derive(Debug)]
+enum ExperimentLoadError {
+    Missing,
+    Failed(CustomError),
+}
 
 async fn invalidate_experiment_cache_by_id(db: &ExperimentsDB, id: &str, company_id: &str) {
     let key: Option<String> = sqlx::query_scalar(
@@ -130,44 +148,77 @@ pub async fn db_get_experiment_by_key(
     company_id: &str,
 ) -> Result<Option<Arc<CachedExperiment>>, CustomError> {
     let cache_key = (company_id.to_string(), key.to_string());
+    let pool = db.pool.clone();
+    let key_for_loader = key.to_string();
+    let company_for_loader = company_id.to_string();
 
-    if let Some(cached) = db.experiment_cache.get(&cache_key).await {
-        return Ok(Some(cached));
+    // Single-flight: under a stampede of concurrent misses for the same key,
+    // moka runs the loader exactly once and hands the result to all waiters.
+    let result = db
+        .experiment_cache
+        .try_get_with::<_, ExperimentLoadError>(cache_key, async move {
+            let query = sqlx::query_as(
+                "
+                SELECT
+                    experiment_id,
+                    key,
+                    description,
+                    status,
+                    primary_metric,
+                    variants,
+                    segments,
+                    started_at,
+                    stopped_at,
+                    created_at,
+                    updated_at,
+                    company_id
+                FROM experiments
+                WHERE key = $1
+                  AND company_id = $2
+                  AND status != 'deleted'
+                ",
+            )
+            .bind(&key_for_loader)
+            .bind(&company_for_loader)
+            .fetch_optional(&pool);
+
+            // Bound the SQLite call so a wedged connection can't pin an actix
+            // worker. Timeout maps to a 500 today; the loader error is shared
+            // with any concurrent waiters via moka's single-flight.
+            let row: Option<ExperimentRow> = tokio::time::timeout(
+                EXPERIMENT_LOOKUP_TIMEOUT,
+                query,
+            )
+            .await
+            .map_err(|_| {
+                log::error!(
+                    "experiment lookup timed out after {:?} for key={} company_id={}",
+                    EXPERIMENT_LOOKUP_TIMEOUT,
+                    key_for_loader,
+                    company_for_loader,
+                );
+                ExperimentLoadError::Failed(CustomError::InternalError(
+                    "experiment lookup timed out".to_string(),
+                ))
+            })?
+            .map_err(|e| ExperimentLoadError::Failed(CustomError::from(e)))?;
+
+            match row {
+                None => Err(ExperimentLoadError::Missing),
+                Some(r) => parse_cached_experiment(r)
+                    .map(Arc::new)
+                    .map_err(ExperimentLoadError::Failed),
+            }
+        })
+        .await;
+
+    match result {
+        Ok(arc) => Ok(Some(arc)),
+        Err(arc_err) => match arc_err.as_ref() {
+            ExperimentLoadError::Missing => Ok(None),
+            ExperimentLoadError::Failed(e) => Err(e.clone()),
+        },
     }
-
-    let row: Option<ExperimentRow> = sqlx::query_as(
-        "
-        SELECT
-            experiment_id,
-            key,
-            description,
-            status,
-            primary_metric,
-            variants,
-            segments,
-            started_at,
-            stopped_at,
-            created_at,
-            updated_at,
-            company_id
-        FROM experiments
-        WHERE key = $1
-          AND company_id = $2
-          AND status != 'deleted'
-        ",
-    )
-    .bind(key)
-    .bind(company_id)
-    .fetch_optional(&db.pool)
-    .await?;
-
-    let Some(row) = row else {
-        return Ok(None);
-    };
-
-    let cached = Arc::new(parse_cached_experiment(row)?);
-    db.experiment_cache.insert(cache_key, Arc::clone(&cached)).await;
-    Ok(Some(cached))
 }
 
 fn parse_cached_experiment(row: ExperimentRow) -> Result<CachedExperiment, CustomError> {
@@ -183,12 +234,19 @@ fn parse_cached_experiment(row: ExperimentRow) -> Result<CachedExperiment, Custo
             row.experiment_id, e
         ))
     })?;
+    
+    // TODO: sort + create a map on POST /create-exp (not need to do it here)
     segments.sort_by_key(|s| s.priority);
+
+    let variant_configs: HashMap<String, Arc<Value>> = variants
+        .into_iter()
+        .map(|v| (v.key, Arc::new(v.config)))
+        .collect();
 
     Ok(CachedExperiment {
         experiment_id: row.experiment_id,
         status: row.status,
-        variants,
+        variant_configs,
         segments,
     })
 }

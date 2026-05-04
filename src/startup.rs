@@ -5,13 +5,24 @@ use actix_web::{
     Result,
     body::MessageBody,
     dev::{Server, ServiceRequest, ServiceResponse},
+    error::JsonPayloadError,
     middleware::{from_fn, Next, Logger},
-    web, App, Error, HttpServer, HttpMessage,
+    web, App, Error, HttpRequest, HttpServer, HttpMessage,
 };
 use actix_cors::Cors;
 
+/// Body limit for `/evaluate`. The valid request shape is `experiment_key` +
+/// `entity_id` (each ≤256 bytes) + a `properties` JSON object. 32KB leaves
+/// generous room for properties while bounding the worst case at the edge,
+/// so the in-validate "is this too big?" walk can stay out of the hot path.
+const EVALUATE_JSON_BODY_LIMIT: usize = 32 * 1024;
+
+/// Body limit for admin write endpoints. Sized so a maxed-out
+/// `CreateExperimentRequest` (per the validator caps in `models/request.rs`)
+/// still fits, while keeping per-request RAM bounded on a small VPS.
+const ADMIN_JSON_BODY_LIMIT: usize = 256 * 1024;
+
 use crate::{
-    analytics::EventSink,
     errors::CustomError,
     models::{ExperimentsDB, JwtSecret},
     repository::db_find_api_key_by_hash,
@@ -31,21 +42,23 @@ use crate::{
         update_experiment,
     },
     services::api_key::{hash_api_key, is_plausible_api_key},
+    services::exposure::EventSink,
     services::google_auth::GoogleTokenVerifier,
     services::jwt::verify_jwt,
 };
 
+fn json_validation_error(err: JsonPayloadError, _req: &HttpRequest) -> Error {
+    let err_message = err.to_string();
+    let clean_error_message = err_message
+        .split(" at line")
+        .next()
+        .map(str::to_string)
+        .unwrap_or(err_message);
+    CustomError::ValidationError(clean_error_message).into()
+}
+
 pub fn json_error_handler(cfg: &mut web::ServiceConfig) {
-    cfg.app_data(web::JsonConfig::default().error_handler(|err, _req| {
-        let err_message = err.to_string();
-
-        let clean_error_message = match err_message.split(" at line").next() {
-            Some(msg) => msg.to_string(),
-            None => err_message,
-        };
-
-        CustomError::ValidationError(clean_error_message.to_string()).into()
-    }));
+    cfg.app_data(web::JsonConfig::default().error_handler(json_validation_error));
 }
 
 async fn api_key_auth_middleware(
@@ -75,8 +88,8 @@ async fn api_key_auth_middleware(
         .ok_or_else(|| CustomError::UnauthorizedError("invalid API key".to_string()))?;
 
     let authenticated = crate::models::AuthenticatedApiKey {
-        api_key_id: row.api_key_id,
-        company_id: row.company_id,
+        api_key_id: row.api_key_id.clone(),
+        company_id: row.company_id.clone(),
     };
 
     req.extensions_mut().insert(authenticated);
@@ -143,6 +156,11 @@ pub fn run(
                 web::scope("/admin/v1")
                 .service(
                     web::scope("/experiments")
+                        .app_data(
+                            web::JsonConfig::default()
+                                .limit(ADMIN_JSON_BODY_LIMIT)
+                                .error_handler(json_validation_error),
+                        )
                         .wrap(from_fn(jwt_auth_middleware))
                         .route("", web::post().to(create_experiment))
                         .route("", web::get().to(get_experiments))
@@ -168,6 +186,11 @@ pub fn run(
                 web::scope("/api/v1")
                 .service(
                     web::scope("/experiments")
+                        .app_data(
+                            web::JsonConfig::default()
+                                .limit(EVALUATE_JSON_BODY_LIMIT)
+                                .error_handler(json_validation_error),
+                        )
                         .wrap(from_fn(api_key_auth_middleware))
                         .route("/evaluate", web::post().to(evaluate))
                 )
