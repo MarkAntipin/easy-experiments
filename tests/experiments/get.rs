@@ -33,7 +33,9 @@ async fn returns_404_for_unknown_id() {
     let app = TestApp::spawn().await;
 
     // Act
-    let response = app.get_experiment("does-not-exist").await;
+    let response = app
+        .get_experiment("00000000-0000-0000-0000-000000000000")
+        .await;
 
     // Assert
     assert_eq!(response.status(), StatusCode::NOT_FOUND);

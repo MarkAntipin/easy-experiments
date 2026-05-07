@@ -88,7 +88,11 @@ async fn returns_404_for_unknown_id() {
 
     // Act
     let response = app
-        .patch_experiment("nope", &json!({ "description": "x" }), None)
+        .patch_experiment(
+            "00000000-0000-0000-0000-000000000000",
+            &json!({ "description": "x" }),
+            None,
+        )
         .await;
 
     // Assert

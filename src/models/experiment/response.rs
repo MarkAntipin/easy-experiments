@@ -1,21 +1,14 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 
 use crate::errors::CustomError;
-use crate::models::db::{ApiKeyRow, CompanyRow, ExperimentRow, UserRow};
-use crate::models::domain::{Segment, Variant};
 
-#[derive(Serialize, Deserialize)]
-pub struct MessageResponse {
-    pub message: String,
-}
+use super::db::ExperimentRow;
+use super::domain::{Segment, Variant};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateExperimentResponse {
     pub experiment_id: String,
-    pub message: String,
 }
 
 #[derive(Serialize)]
@@ -85,88 +78,6 @@ impl From<ExperimentRow> for ExperimentListItem {
             stopped_at: row.stopped_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EvaluateResponse {
-    pub experiment_key: String,
-    pub variant_key: Option<String>,
-    pub config: Option<Arc<serde_json::Value>>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoginResponse {
-    pub token: String,
-    pub user: UserResponse,
-    pub company: CompanyResponse,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResponse {
-    pub user_id: String,
-    pub email: String,
-    pub name: Option<String>,
-    pub picture_url: Option<String>,
-}
-
-impl From<UserRow> for UserResponse {
-    fn from(row: UserRow) -> Self {
-        Self {
-            user_id: row.user_id,
-            email: row.email,
-            name: row.name,
-            picture_url: row.picture_url,
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompanyResponse {
-    pub company_id: String,
-    pub name: String,
-}
-
-impl From<CompanyRow> for CompanyResponse {
-    fn from(row: CompanyRow) -> Self {
-        Self {
-            company_id: row.company_id,
-            name: row.name,
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateApiKeyResponse {
-    pub api_key_id: String,
-    pub name: String,
-    pub key: String,
-    pub key_prefix: String,
-    pub created_at: i64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiKeyListItem {
-    pub api_key_id: String,
-    pub name: String,
-    pub key_prefix: String,
-    pub created_at: i64,
-}
-
-impl From<ApiKeyRow> for ApiKeyListItem {
-    fn from(row: ApiKeyRow) -> Self {
-        Self {
-            api_key_id: row.api_key_id,
-            name: row.name,
-            key_prefix: row.key_prefix,
-            created_at: row.created_at,
         }
     }
 }

@@ -5,7 +5,7 @@ use actix_web::{
     Result,
     body::MessageBody,
     dev::{Server, ServiceRequest, ServiceResponse},
-    error::JsonPayloadError,
+    error::{JsonPayloadError, PathError},
     middleware::{from_fn, Next, Logger},
     web, App, Error, HttpRequest, HttpServer, HttpMessage,
 };
@@ -55,6 +55,10 @@ fn json_validation_error(err: JsonPayloadError, _req: &HttpRequest) -> Error {
         .map(str::to_string)
         .unwrap_or(err_message);
     CustomError::ValidationError(clean_error_message).into()
+}
+
+fn path_validation_error(err: PathError, _req: &HttpRequest) -> Error {
+    CustomError::ValidationError(format!("Invalid path parameter: {}", err)).into()
 }
 
 pub fn json_error_handler(cfg: &mut web::ServiceConfig) {
@@ -160,6 +164,9 @@ pub fn run(
                             web::JsonConfig::default()
                                 .limit(ADMIN_JSON_BODY_LIMIT)
                                 .error_handler(json_validation_error),
+                        )
+                        .app_data(
+                            web::PathConfig::default().error_handler(path_validation_error),
                         )
                         .wrap(from_fn(jwt_auth_middleware))
                         .route("", web::post().to(create_experiment))

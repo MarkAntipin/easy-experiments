@@ -1,4 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse};
+use uuid::Uuid;
 
 use crate::errors::CustomError;
 use crate::models::{
@@ -25,10 +26,11 @@ fn parse_if_match(req: &HttpRequest) -> Result<Option<i64>, CustomError> {
 pub async fn update_experiment(
     db: web::Data<ExperimentsDB>,
     user: web::ReqData<AuthenticatedUser>,
-    id: web::Path<String>,
+    id: web::Path<Uuid>,
     req: HttpRequest,
     payload: ValidatedJson<UpdateExperimentRequest>,
 ) -> Result<HttpResponse, CustomError> {
+    let id = id.into_inner().to_string();
     let if_match = parse_if_match(&req)?;
     experiment::update_experiment(&db, &id, &user.company_id, payload.into_inner(), if_match)
         .await?;
@@ -41,8 +43,9 @@ pub async fn update_experiment(
 pub async fn start_experiment(
     db: web::Data<ExperimentsDB>,
     user: web::ReqData<AuthenticatedUser>,
-    id: web::Path<String>,
+    id: web::Path<Uuid>,
 ) -> Result<HttpResponse, CustomError> {
+    let id = id.into_inner().to_string();
     experiment::start_experiment(&db, &id, &user.company_id).await?;
     Ok(HttpResponse::Ok().json(MessageResponse {
         message: "Experiment started".to_string(),
@@ -52,8 +55,9 @@ pub async fn start_experiment(
 pub async fn stop_experiment(
     db: web::Data<ExperimentsDB>,
     user: web::ReqData<AuthenticatedUser>,
-    id: web::Path<String>,
+    id: web::Path<Uuid>,
 ) -> Result<HttpResponse, CustomError> {
+    let id = id.into_inner().to_string();
     experiment::stop_experiment(&db, &id, &user.company_id).await?;
     Ok(HttpResponse::Ok().json(MessageResponse {
         message: "Experiment stopped".to_string(),

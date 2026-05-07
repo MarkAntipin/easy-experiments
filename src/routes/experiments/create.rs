@@ -17,6 +17,5 @@ pub async fn create_experiment(
 
     Ok(HttpResponse::Created().json(CreateExperimentResponse {
         experiment_id: id,
-        message: "Experiment created".to_string(),
     }))
 }

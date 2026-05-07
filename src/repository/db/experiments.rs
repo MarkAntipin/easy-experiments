@@ -234,8 +234,7 @@ fn parse_cached_experiment(row: ExperimentRow) -> Result<CachedExperiment, Custo
             row.experiment_id, e
         ))
     })?;
-    
-    // TODO: sort + create a map on POST /create-exp (not need to do it here)
+
     segments.sort_by_key(|s| s.priority);
 
     let variant_configs: HashMap<String, Arc<Value>> = variants
@@ -572,7 +571,10 @@ pub async fn db_delete_experiment(
 
     let mut tx = db.pool.begin().await?;
 
-    let result = sqlx::query(
+    // RETURNING key in the same statement so cache invalidation never depends
+    // on a second post-commit lookup that could silently fail and leave eval
+    // serving the deleted row until TTL.
+    let updated_key: Option<String> = sqlx::query_scalar(
         "
         UPDATE experiments
         SET
@@ -581,17 +583,20 @@ pub async fn db_delete_experiment(
         WHERE experiment_id = $2
           AND company_id = $3
           AND status IN ('draft', 'stopped')
+        RETURNING key
         ",
     )
     .bind(now)
     .bind(id)
     .bind(company_id)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    if result.rows_affected() > 0 {
+    if let Some(key) = updated_key {
         tx.commit().await?;
-        invalidate_experiment_cache_by_id(db, id, company_id).await;
+        db.experiment_cache
+            .invalidate(&(company_id.to_string(), key))
+            .await;
         return Ok(DeleteExperimentOutcome::Deleted);
     }
 
@@ -610,7 +615,9 @@ pub async fn db_delete_experiment(
     .fetch_optional(&mut *tx)
     .await?;
 
-    tx.commit().await?;
+    // No write occurred; let the tx drop (auto-rollback) instead of a commit
+    // whose error would surface as 500 on what is logically a 404/409.
+    drop(tx);
 
     Ok(match existing {
         None => DeleteExperimentOutcome::NotFound,

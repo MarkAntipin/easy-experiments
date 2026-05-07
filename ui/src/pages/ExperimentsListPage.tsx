@@ -9,7 +9,6 @@ import { StatusBadge } from '@/components/Badge';
 import { PageBody, PageHeader } from '@/components/PageHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { PageLoader } from '@/components/Spinner';
-import { ConceptPanel } from '@/components/teaching';
 import { formatRelative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -113,25 +112,22 @@ export function ExperimentsListPage() {
             </table>
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
-            <ConceptPanel />
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
-              <h3 className="text-sm font-semibold text-slate-900">
-                Ready to try one?
-              </h3>
-              <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-                Pick a feature you&rsquo;d like to test, define a variant or
-                two, and start measuring. You can stop the experiment at any
-                time.
-              </p>
-              <div className="mt-4">
-                <Link to="/experiments/new">
-                  <Button>
-                    <Plus className="h-4 w-4" />
-                    Create your first experiment
-                  </Button>
-                </Link>
-              </div>
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Ready to try one?
+            </h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+              Pick a feature you&rsquo;d like to test, define a variant or
+              two, and start measuring. You can stop the experiment at any
+              time.
+            </p>
+            <div className="mt-4">
+              <Link to="/experiments/new">
+                <Button>
+                  <Plus className="h-4 w-4" />
+                  Create your first experiment
+                </Button>
+              </Link>
             </div>
           </div>
         )}

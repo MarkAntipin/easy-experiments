@@ -16,7 +16,6 @@ pub struct GeneratedApiKey {
     pub prefix: String,
 }
 
-//  TODO: review, but looks ok
 pub fn generate_api_key() -> GeneratedApiKey {
     let mut buf = [0u8; SECRET_BYTES];
     rand::rng().fill_bytes(&mut buf);

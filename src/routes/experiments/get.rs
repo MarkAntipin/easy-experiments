@@ -1,5 +1,6 @@
 use actix_web::web;
 use actix_web::HttpResponse;
+use uuid::Uuid;
 
 use crate::errors::CustomError;
 use crate::models::{
@@ -11,8 +12,9 @@ use crate::services::experiment;
 pub async fn get_experiment_by_id(
     db: web::Data<ExperimentsDB>,
     user: web::ReqData<AuthenticatedUser>,
-    id: web::Path<String>,
+    id: web::Path<Uuid>,
 ) -> Result<HttpResponse, CustomError> {
+    let id = id.into_inner().to_string();
     let row = experiment::get_experiment(&db, &id, &user.company_id).await?;
     Ok(HttpResponse::Ok().json(ExperimentResponse::from_row(row)?))
 }

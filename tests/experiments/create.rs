@@ -22,7 +22,6 @@ async fn returns_201_and_persists() {
         .expect("experimentId in response")
         .to_string();
     assert!(!experiment_id.is_empty());
-    assert_eq!(payload["message"], "Experiment created");
 
     let row: (String, String) = sqlx::query_as(
         "SELECT key, status FROM experiments WHERE experiment_id = $1 AND company_id = $2",
@@ -63,6 +62,48 @@ async fn rejects_duplicate_key_with_409() {
 
     // Assert
     assert_eq!(second.status(), StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn allows_same_key_across_tenants() {
+    // Arrange: user A creates an experiment with a given key.
+    let app = TestApp::spawn().await;
+    let body = valid_experiment_body("shared_key");
+    let first = app.post_experiment(&body).await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+
+    let (other_user, other_token) = app.seed_other_user().await;
+
+    // Act: user B (different company) creates an experiment with the same key.
+    let second = app
+        .raw_client()
+        .post(format!("{}/admin/v1/experiments", app.addr()))
+        .bearer_auth(&other_token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    // Assert: both creations succeed and each row is scoped to its own company.
+    assert_eq!(second.status(), StatusCode::CREATED);
+
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM experiments WHERE key = $1 AND company_id = $2")
+            .bind("shared_key")
+            .bind(&other_user.company_id)
+            .fetch_one(&app.pool)
+            .await
+            .expect("count for other tenant");
+    assert_eq!(count.0, 1);
+
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM experiments WHERE key = $1 AND company_id = $2")
+            .bind("shared_key")
+            .bind(&app.user.company_id)
+            .fetch_one(&app.pool)
+            .await
+            .expect("count for primary tenant");
+    assert_eq!(count.0, 1);
 }
 
 #[tokio::test]
