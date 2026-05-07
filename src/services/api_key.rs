@@ -3,12 +3,16 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 use crate::errors::CustomError;
-use crate::models::{ApiKeyRow, ExperimentsDB};
-use crate::repository::{db_create_api_key, db_list_api_keys, db_revoke_api_key, NewApiKey};
+use crate::models::{ApiKeyListItem, ExperimentsDB};
+use crate::repository::{
+    db_count_api_keys, db_create_api_key, db_list_api_key_summaries, db_revoke_api_key,
+    CreateApiKeyOutcome, NewApiKey,
+};
 
 pub const API_KEY_PREFIX: &str = "eek-";
 const SECRET_BYTES: usize = 32;
 const PREFIX_DISPLAY_CHARS: usize = 12;
+const MAX_API_KEYS_PER_COMPANY: i64 = 50;
 
 pub struct GeneratedApiKey {
     pub plaintext: String,
@@ -56,8 +60,16 @@ pub async fn create(
     company_id: &str,
     name: String,
 ) -> Result<CreatedApiKey, CustomError> {
+    let active = db_count_api_keys(db, company_id).await?;
+    if active >= MAX_API_KEYS_PER_COMPANY {
+        return Err(CustomError::ConflictError(format!(
+            "Maximum of {} API keys per company reached",
+            MAX_API_KEYS_PER_COMPANY
+        )));
+    }
+
     let generated = generate_api_key();
-    let (api_key_id, created_at) = db_create_api_key(
+    match db_create_api_key(
         db,
         NewApiKey {
             company_id,
@@ -66,37 +78,41 @@ pub async fn create(
             key_prefix: &generated.prefix,
         },
     )
-    .await?;
-
-    Ok(CreatedApiKey {
-        api_key_id,
-        name,
-        plaintext: generated.plaintext,
-        prefix: generated.prefix,
-        created_at,
-    })
+    .await?
+    {
+        CreateApiKeyOutcome::NameConflict => Err(CustomError::ConflictError(format!(
+            "API key with name '{}' already exists",
+            name
+        ))),
+        CreateApiKeyOutcome::Created {
+            api_key_id,
+            created_at,
+        } => Ok(CreatedApiKey {
+            api_key_id,
+            name,
+            plaintext: generated.plaintext,
+            prefix: generated.prefix,
+            created_at,
+        }),
+    }
 }
 
 pub async fn list(
     db: &ExperimentsDB,
     company_id: &str,
-) -> Result<Vec<ApiKeyRow>, CustomError> {
-    db_list_api_keys(db, company_id).await
+) -> Result<Vec<ApiKeyListItem>, CustomError> {
+    let rows = db_list_api_key_summaries(db, company_id).await?;
+    Ok(rows.into_iter().map(Into::into).collect())
 }
 
 pub async fn revoke(
     db: &ExperimentsDB,
     api_key_id: &str,
     company_id: &str,
-) -> Result<(), CustomError> {
-    if db_revoke_api_key(db, api_key_id, company_id).await? {
-        Ok(())
-    } else {
-        Err(CustomError::NotFoundError(format!(
-            "API key with id '{}' not found",
-            api_key_id
-        )))
-    }
+) -> Result<bool, CustomError> {
+    // Idempotent: a repeat revoke (or a never-existed id) returns Ok(false) so
+    // the handler can send 204 without distinguishing first-call from second.
+    db_revoke_api_key(db, api_key_id, company_id).await
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import * as ExperimentsAPI from '@/api/experiments';
 import type { ExperimentStatus } from '@/api/types';
 import { Button } from '@/components/Button';
@@ -10,6 +10,7 @@ import { PageBody, PageHeader } from '@/components/PageHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { PageLoader } from '@/components/Spinner';
 import { SegmentedControl } from '@/components/SegmentedControl';
+import { Input } from '@/components/Input';
 import { formatRelative } from '@/lib/format';
 
 type Filter = 'all' | Exclude<ExperimentStatus, 'deleted'>;
@@ -23,11 +24,25 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
 
 export function ExperimentsListPage() {
   const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
 
   const query = useQuery({
     queryKey: ['experiments', filter],
     queryFn: () => ExperimentsAPI.listExperiments(filter === 'all' ? undefined : filter),
   });
+
+  const filteredItems = useMemo(() => {
+    const items = query.data?.items ?? [];
+    const needle = search.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter(
+      (exp) =>
+        exp.key.toLowerCase().includes(needle) ||
+        (exp.description?.toLowerCase().includes(needle) ?? false),
+    );
+  }, [query.data, search]);
+
+  const hasItems = (query.data?.items.length ?? 0) > 0;
 
   return (
     <>
@@ -37,42 +52,57 @@ export function ExperimentsListPage() {
         actions={
           <Link to="/experiments/new">
             <Button>
-              <Plus aria-hidden className="h-4 w-4" />
+              <Plus aria-hidden className="h-5 w-5" />
               New experiment
             </Button>
           </Link>
         }
       />
       <PageBody>
-        <SegmentedControl
-          ariaLabel="Filter experiments by status"
-          className="mb-4"
-          options={FILTERS}
-          value={filter}
-          onChange={setFilter}
-        />
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SegmentedControl
+            ariaLabel="Filter experiments by status"
+            options={FILTERS}
+            value={filter}
+            onChange={setFilter}
+          />
+          <div className="relative sm:w-72">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            />
+            <Input
+              type="search"
+              aria-label="Search experiments"
+              placeholder="Search by key or description"
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
 
         {query.isLoading ? (
           <PageLoader />
         ) : query.isError ? (
           <ErrorAlert error={query.error} title="Failed to load experiments" />
-        ) : query.data && query.data.items.length > 0 ? (
+        ) : hasItems && filteredItems.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-base">
                 <thead className="bg-slate-50">
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                    <th scope="col" className="px-4 py-2 font-medium">Key</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Status</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Primary metric</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Created</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Updated</th>
+                  <tr className="text-left text-sm uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="px-5 py-3 font-medium">Key</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Status</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Primary metric</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Created</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {query.data.items.map((exp) => (
+                  {filteredItems.map((exp) => (
                     <tr key={exp.experimentId} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5">
+                      <td className="px-5 py-3">
                         <Link
                           to={`/experiments/${exp.experimentId}`}
                           className="font-medium text-brand-700 hover:underline"
@@ -80,21 +110,21 @@ export function ExperimentsListPage() {
                           {exp.key}
                         </Link>
                         {exp.description ? (
-                          <div className="max-w-md truncate text-xs text-slate-500">
+                          <div className="max-w-md truncate text-sm text-slate-500">
                             {exp.description}
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-5 py-3">
                         <StatusBadge status={exp.status} />
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                      <td className="px-5 py-3 font-mono text-sm text-slate-700">
                         {exp.primaryMetric}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500">
+                      <td className="px-5 py-3 text-slate-500">
                         {formatRelative(exp.createdAt)}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500">
+                      <td className="px-5 py-3 text-slate-500">
                         {formatRelative(exp.updatedAt)}
                       </td>
                     </tr>
@@ -103,20 +133,30 @@ export function ExperimentsListPage() {
               </table>
             </div>
           </div>
+        ) : hasItems ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-12 text-center">
+            <h3 className="text-base font-semibold text-slate-900">
+              No experiments match your search
+            </h3>
+            <p className="mx-auto mt-1.5 max-w-md text-base text-slate-500">
+              Try a different keyword or clear the search to see all
+              experiments.
+            </p>
+          </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
-            <h3 className="text-sm font-semibold text-slate-900">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-12 text-center">
+            <h3 className="text-base font-semibold text-slate-900">
               Ready to try one?
             </h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+            <p className="mx-auto mt-1.5 max-w-md text-base text-slate-500">
               Pick a feature you&rsquo;d like to test, define a variant or
               two, and start measuring. You can stop the experiment at any
               time.
             </p>
-            <div className="mt-4">
+            <div className="mt-5">
               <Link to="/experiments/new">
                 <Button variant="brand">
-                  <Plus aria-hidden className="h-4 w-4" />
+                  <Plus aria-hidden className="h-5 w-5" />
                   Create your first experiment
                 </Button>
               </Link>

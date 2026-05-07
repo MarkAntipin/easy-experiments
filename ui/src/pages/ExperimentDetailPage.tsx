@@ -85,27 +85,27 @@ export function ExperimentDetailPage() {
         description={
           <span className="flex items-center gap-2">
             <StatusBadge status={exp.status} />
-            <span className="font-mono text-xs text-slate-500">{exp.experimentId}</span>
+            <span className="font-mono text-sm text-slate-500">{exp.experimentId}</span>
           </span>
         }
         actions={
           <div className="flex items-center gap-2">
             <Link
               to="/experiments"
-              className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 text-base font-medium text-slate-600 hover:text-slate-900"
             >
-              <ArrowLeft aria-hidden className="h-4 w-4" />
+              <ArrowLeft aria-hidden className="h-5 w-5" />
               Back
             </Link>
             <Link to={`/experiments/${exp.experimentId}/edit`}>
               <Button variant="secondary">
-                <Pencil aria-hidden className="h-4 w-4" />
+                <Pencil aria-hidden className="h-5 w-5" />
                 Edit
               </Button>
             </Link>
             {exp.status === 'draft' ? (
               <Button onClick={() => setConfirmStart(true)}>
-                <Play aria-hidden className="h-4 w-4" />
+                <Play aria-hidden className="h-5 w-5" />
                 Start
               </Button>
             ) : null}
@@ -114,12 +114,12 @@ export function ExperimentDetailPage() {
                 variant="secondary"
                 onClick={() => setConfirmStop(true)}
               >
-                <Square aria-hidden className="h-4 w-4" />
+                <Square aria-hidden className="h-5 w-5" />
                 Stop
               </Button>
             ) : null}
             <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              <Trash2 aria-hidden className="h-4 w-4" />
+              <Trash2 aria-hidden className="h-5 w-5" />
               Delete
             </Button>
           </div>
@@ -127,7 +127,7 @@ export function ExperimentDetailPage() {
       />
       <PageBody>
         <div className="flex flex-col gap-6">
-          <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-3">
+          <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-6 sm:grid-cols-3">
             <Meta label="Primary metric" value={exp.primaryMetric} mono />
             <Meta label="Created" value={formatTimestamp(exp.createdAt)} />
             <Meta label="Updated" value={formatTimestamp(exp.updatedAt)} />
@@ -136,35 +136,35 @@ export function ExperimentDetailPage() {
             <Meta label="Description" value={exp.description ?? '—'} />
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">Variants</h2>
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <h2 className="mb-4 text-base font-semibold text-slate-900">Variants</h2>
             <div className="overflow-hidden rounded border border-slate-200">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <table className="min-w-full divide-y divide-slate-200 text-base">
+                  <thead className="bg-slate-50 text-left text-sm uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th scope="col" className="px-4 py-2 font-medium">Key</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Control</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Config</th>
+                      <th scope="col" className="px-5 py-3 font-medium">Key</th>
+                      <th scope="col" className="px-5 py-3 font-medium">Control</th>
+                      <th scope="col" className="px-5 py-3 font-medium">Config</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {exp.variants.map((v) => (
                       <tr key={v.key}>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-800">
+                        <td className="px-5 py-3 font-mono text-sm text-slate-800">
                           {v.key}
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-5 py-3">
                           {v.isControl ? (
-                            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-200">
+                            <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-700 ring-1 ring-inset ring-brand-200">
                               control
                             </span>
                           ) : (
-                            <span className="text-xs text-slate-400">—</span>
+                            <span className="text-sm text-slate-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5">
-                          <pre className="max-w-md overflow-x-auto rounded bg-ink-50 px-2 py-1 font-mono text-xs text-ink-700">
+                        <td className="px-5 py-3">
+                          <pre className="max-w-md overflow-x-auto rounded bg-ink-50 px-2.5 py-1.5 font-mono text-sm text-ink-700">
                             {JSON.stringify(v.config ?? {}, null, 2)}
                           </pre>
                         </td>
@@ -176,8 +176,8 @@ export function ExperimentDetailPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">Segments</h2>
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <h2 className="mb-4 text-base font-semibold text-slate-900">Segments</h2>
             <div className="flex flex-col gap-3">
               {exp.segments
                 .slice()
@@ -185,10 +185,10 @@ export function ExperimentDetailPage() {
                 .map((seg) => (
                   <div
                     key={seg.priority}
-                    className="flex flex-col gap-3 rounded-md border border-slate-200 p-3"
+                    className="flex flex-col gap-3 rounded-md border border-slate-200 p-4"
                   >
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="rounded bg-ink-100 px-2 py-0.5 font-mono text-xs text-ink-700">
+                    <div className="flex items-center gap-3 text-base">
+                      <span className="rounded bg-ink-100 px-2.5 py-0.5 font-mono text-sm text-ink-700">
                         priority {seg.priority}
                       </span>
                       <span className="text-slate-600">
@@ -215,7 +215,7 @@ export function ExperimentDetailPage() {
                         {seg.distributions.map((d) => (
                           <li
                             key={d.variantKey}
-                            className="rounded bg-ink-100 px-2 py-0.5 font-mono text-ink-700"
+                            className="rounded bg-ink-100 px-2.5 py-0.5 font-mono text-ink-700"
                           >
                             {d.variantKey}: {d.percent}%
                           </li>
@@ -243,7 +243,7 @@ export function ExperimentDetailPage() {
             loading={startMutation.isPending}
             onClick={() => startMutation.mutate()}
           >
-            <Play aria-hidden className="h-4 w-4" />
+            <Play aria-hidden className="h-5 w-5" />
             Start now
           </Button>
         </div>
@@ -264,7 +264,7 @@ export function ExperimentDetailPage() {
             loading={stopMutation.isPending}
             onClick={() => stopMutation.mutate()}
           >
-            <Square aria-hidden className="h-4 w-4" />
+            <Square aria-hidden className="h-5 w-5" />
             Stop experiment
           </Button>
         </div>
@@ -296,11 +296,11 @@ export function ExperimentDetailPage() {
 function Meta({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+      <div className="text-sm font-medium uppercase tracking-wide text-slate-500">
         {label}
       </div>
       <div
-        className={`mt-0.5 text-sm text-slate-900 ${mono ? 'font-mono' : ''}`}
+        className={`mt-1 text-base text-slate-900 ${mono ? 'font-mono' : ''}`}
       >
         {value}
       </div>
@@ -310,7 +310,7 @@ function Meta({ label, value, mono }: { label: string; value: string; mono?: boo
 
 function SegmentBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 text-xs">
+    <div className="flex flex-col gap-1 text-sm">
       <div className="font-semibold text-slate-500">{title}</div>
       {children}
     </div>

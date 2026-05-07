@@ -10,11 +10,11 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-slate-200 bg-white px-8 py-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 border-b border-slate-200 bg-white px-10 py-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
         {description ? (
-          <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+          <p className="mt-1 text-base text-slate-500">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
@@ -23,5 +23,5 @@ export function PageHeader({
 }
 
 export function PageBody({ children }: { children: ReactNode }) {
-  return <div className="px-8 py-6">{children}</div>;
+  return <div className="px-10 py-8">{children}</div>;
 }

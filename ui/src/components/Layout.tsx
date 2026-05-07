@@ -18,7 +18,7 @@ function NavItem({
       to={to}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+          'group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-base font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
           isActive
             ? 'bg-brand-50 text-brand-700'
             : 'text-ink-500 hover:bg-slate-100 hover:text-ink-900',
@@ -36,7 +36,7 @@ function NavItem({
           />
           <Icon
             aria-hidden
-            className={cn('h-4 w-4', isActive ? 'text-brand-600' : 'text-ink-400 group-hover:text-ink-700')}
+            className={cn('h-5 w-5', isActive ? 'text-brand-600' : 'text-ink-400 group-hover:text-ink-700')}
           />
           {label}
         </>
@@ -56,10 +56,10 @@ export function Layout() {
       >
         Skip to main content
       </a>
-      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
-        <div className="flex h-14 items-center gap-2.5 border-b border-slate-200 px-4">
-          <LogoMark size={28} />
-          <span className="text-[15px] font-semibold leading-none tracking-tight">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
+          <LogoMark size={32} />
+          <span className="text-base font-semibold leading-none tracking-tight">
             <span className="text-brand-600">Easy</span>
             <span className="text-ink-900">Experiments</span>
           </span>
@@ -70,27 +70,27 @@ export function Layout() {
         </nav>
         <div className="border-t border-slate-200 p-3">
           {session ? (
-            <div className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5">
+            <div className="mb-2 flex items-center gap-2.5 rounded-md px-2 py-2">
               {session.user.pictureUrl ? (
                 <img
                   src={session.user.pictureUrl}
                   alt=""
-                  className="h-7 w-7 rounded-full ring-2 ring-brand-100"
+                  className="h-9 w-9 rounded-full ring-2 ring-brand-100"
                   referrerPolicy="no-referrer"
                 />
               ) : (
                 <div
                   aria-hidden
-                  className="grid h-7 w-7 place-items-center rounded-full bg-brand-gradient text-xs font-semibold text-white"
+                  className="grid h-9 w-9 place-items-center rounded-full bg-brand-gradient text-sm font-semibold text-white"
                 >
                   {session.user.email.slice(0, 1).toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-sm font-medium text-ink-900">
+                <div className="truncate text-base font-medium text-ink-900">
                   {session.user.name ?? session.user.email}
                 </div>
-                <div className="truncate text-xs text-ink-500">
+                <div className="truncate text-sm text-ink-500">
                   {session.company.name}
                 </div>
               </div>
@@ -99,9 +99,9 @@ export function Layout() {
           <button
             type="button"
             onClick={logout}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-ink-500 transition hover:bg-slate-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-base font-medium text-ink-500 transition hover:bg-slate-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            <LogOut aria-hidden className="h-4 w-4" />
+            <LogOut aria-hidden className="h-5 w-5" />
             Sign out
           </button>
         </div>

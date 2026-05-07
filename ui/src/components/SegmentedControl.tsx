@@ -43,7 +43,7 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(opt.value)}
             className={cn(
               'rounded font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-              size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1 text-sm',
+              size === 'sm' ? 'px-2.5 py-1 text-sm' : 'px-3.5 py-1.5 text-base',
               active
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800',

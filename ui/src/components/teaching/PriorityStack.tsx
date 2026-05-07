@@ -35,19 +35,19 @@ export function PriorityStack({ segments, variantKeys }: PriorityStackProps) {
   });
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
+    <div className="rounded-md border border-slate-200 bg-white p-4">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Match order
         </span>
-        <span className="text-[10px] italic text-slate-400">
+        <span className="text-xs italic text-slate-400">
           first match wins
         </span>
       </div>
 
       <div className="flex gap-3">
         <div className="flex flex-col items-center pt-1">
-          <ArrowDown className="h-3.5 w-3.5 text-slate-400" />
+          <ArrowDown className="h-4 w-4 text-slate-400" />
           <div className="mt-0.5 w-px flex-1 bg-gradient-to-b from-slate-300 to-transparent" />
         </div>
 
@@ -81,17 +81,17 @@ function PriorityRow({
         : `${segment.constraintCount} filters`;
 
   return (
-    <li className="flex items-center gap-3 rounded border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
-      <span className="inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded bg-white px-1.5 text-[11px] font-semibold tabular-nums text-ink-900 ring-1 ring-slate-200">
+    <li className="flex items-center gap-3 rounded border border-slate-100 bg-slate-50/60 px-3 py-2">
+      <span className="inline-flex h-7 min-w-[2.75rem] items-center justify-center rounded bg-white px-2 text-sm font-semibold tabular-nums text-ink-900 ring-1 ring-slate-200">
         P{segment.priority}
       </span>
-      <span className="hidden text-[11px] text-slate-500 sm:inline">
+      <span className="hidden text-sm text-slate-500 sm:inline">
         Segment #{segment.positionLabel}
       </span>
-      <span className="text-[10px] text-slate-500">{constraintLabel}</span>
+      <span className="text-xs text-slate-500">{constraintLabel}</span>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 sm:block">
+        <div className="hidden h-2 w-28 overflow-hidden rounded-full bg-slate-200 sm:block">
           <div className="flex h-full">
             {segment.distributions.map((d, i) => {
               const c = variantColorByKey(variantKeys, d.variantKey);
@@ -111,7 +111,7 @@ function PriorityRow({
             })}
           </div>
         </div>
-        <span className="w-10 text-right text-[10px] tabular-nums text-slate-500">
+        <span className="w-12 text-right text-xs tabular-nums text-slate-500">
           {rollout}%
         </span>
       </div>

@@ -45,13 +45,13 @@ export function Dialog({ open, onClose, title, description, children, className 
         )}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
           <div>
-            <h2 id={titleId} className="text-base font-semibold text-slate-900">
+            <h2 id={titleId} className="text-lg font-semibold text-slate-900">
               {title}
             </h2>
             {description ? (
-              <p id={descId} className="mt-1 text-sm text-slate-500">
+              <p id={descId} className="mt-1 text-base text-slate-500">
                 {description}
               </p>
             ) : null}
@@ -62,10 +62,10 @@ export function Dialog({ open, onClose, title, description, children, className 
             onClick={onClose}
             aria-label="Close dialog"
           >
-            <X aria-hidden className="h-4 w-4" />
+            <X aria-hidden className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>,
     document.body,

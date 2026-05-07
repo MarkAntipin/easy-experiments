@@ -189,9 +189,9 @@ export function ExperimentForm({
     >
       {lockMode !== 'unlocked' ? <LockBanner mode={lockMode} /> : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-semibold text-slate-900">Basics</h2>
-        <p className="mb-4 text-xs text-slate-500">
+      <section className="rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 text-base font-semibold text-slate-900">Basics</h2>
+        <p className="mb-4 text-sm text-slate-500">
           A short identifier for this experiment and the metric you&rsquo;ll
           watch to decide which variant wins.
         </p>
@@ -284,7 +284,7 @@ export function ExperimentForm({
 function LockBanner({ mode }: { mode: ExperimentFormLockMode }) {
   if (mode === 'rampUpOnly') {
     return (
-      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-base text-amber-900">
         <strong className="font-semibold">Running.</strong> You can edit the
         description and ramp up each segment&rsquo;s rollout %. Everything else
         is locked to keep the analysis comparable. Rollout can only go up,
@@ -293,7 +293,7 @@ function LockBanner({ mode }: { mode: ExperimentFormLockMode }) {
     );
   }
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-base text-slate-700">
       <strong className="font-semibold">Stopped.</strong> Only the description
       is editable. To run a new test, create a new experiment.
     </div>
@@ -317,14 +317,14 @@ function VariantsSection({
   const rootError = errors.variants?.message ?? errors.variants?.root?.message;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section className="rounded-lg border border-slate-200 bg-white p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
             Variants
             {locked ? <ReadOnlyTag /> : null}
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             The different versions you want to test. Mark one as the control —
             the others will be compared against it.
           </p>
@@ -344,7 +344,7 @@ function VariantsSection({
       </div>
 
       {rootError ? (
-        <p className="mb-3 text-xs text-red-600">{rootError}</p>
+        <p className="mb-3 text-sm text-red-600">{rootError}</p>
       ) : null}
 
       <div className="flex flex-col gap-3">
@@ -371,8 +371,8 @@ function VariantsSection({
                 />
               </Field>
               <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-slate-700">Control</span>
-                <label className="mt-1 inline-flex h-10 items-center gap-2">
+                <span className="text-base font-medium text-slate-700">Control</span>
+                <label className="mt-1 inline-flex h-11 items-center gap-2">
                   <input
                     type="radio"
                     name="control-variant"
@@ -381,7 +381,7 @@ function VariantsSection({
                     onChange={() => onControlChange(idx)}
                     className="h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500"
                   />
-                  <span className="text-xs text-slate-500">Use as control</span>
+                  <span className="text-sm text-slate-500">Use as control</span>
                 </label>
               </div>
               <Field
@@ -397,7 +397,7 @@ function VariantsSection({
                   {...register(`variants.${idx}.config`)}
                 />
               </Field>
-              <div className="flex items-start pt-6">
+              <div className="flex items-start pt-7">
                 {!locked && array.fields.length > 1 ? (
                   <Button
                     size="sm"
@@ -450,14 +450,14 @@ function SegmentsSection({
   const showReadOnlyTag = shapeLocked && rolloutLocked;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section className="rounded-lg border border-slate-200 bg-white p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
             Segments
             {showReadOnlyTag ? <ReadOnlyTag /> : null}
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             Decide who sees this experiment and how they&rsquo;re split. Lower
             priority numbers are checked first; the first matching segment
             wins.
@@ -499,7 +499,7 @@ function SegmentsSection({
       </div>
 
       {rootError ? (
-        <p className="mb-3 text-xs text-red-600">{rootError}</p>
+        <p className="mb-3 text-sm text-red-600">{rootError}</p>
       ) : null}
 
       {array.fields.length >= 2 ? (
@@ -581,9 +581,9 @@ function SegmentCard({
   const undershoot = Math.max(0, 100 - sum);
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50/40 p-4">
+    <div className="rounded-md border border-slate-200 bg-slate-50/40 p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-800">
+        <h3 className="text-base font-medium text-slate-800">
           Segment #{index + 1}
         </h3>
         {canRemove ? (
@@ -647,10 +647,10 @@ function SegmentCard({
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
               Constraints
             </span>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-sm text-slate-500">
               Filter who matches this segment. Property names come from the{' '}
               <code className="rounded bg-slate-100 px-1 font-mono">
                 properties
@@ -676,7 +676,7 @@ function SegmentCard({
           ) : null}
         </div>
         {constraintArray.fields.length === 0 ? (
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             No constraints — all users match this segment.
           </p>
         ) : (
@@ -724,7 +724,7 @@ function SegmentCard({
                     </Button>
                   ) : null}
                   {cErr?.property?.message || cErr?.value?.message ? (
-                    <p className="col-span-full text-xs text-red-600">
+                    <p className="col-span-full text-sm text-red-600">
                       {cErr?.property?.message ?? cErr?.value?.message}
                     </p>
                   ) : null}
@@ -737,13 +737,13 @@ function SegmentCard({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Distributions
           </span>
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                'inline-flex items-center gap-1 text-xs font-medium tabular-nums',
+                'inline-flex items-center gap-1 text-sm font-medium tabular-nums',
                 sum === 100
                   ? 'text-emerald-600'
                   : sum > 100
@@ -751,7 +751,7 @@ function SegmentCard({
                     : 'text-amber-600',
               )}
             >
-              {sum > 100 ? <AlertTriangle aria-hidden className="h-3.5 w-3.5" /> : null}
+              {sum > 100 ? <AlertTriangle aria-hidden className="h-4 w-4" /> : null}
               Total: {sum}%
               {sum > 100 ? <span> · over by {overshoot}%</span> : null}
               {sum < 100 ? <span> · {undershoot}% unallocated</span> : null}
@@ -775,12 +775,12 @@ function SegmentCard({
           </div>
         </div>
         {err?.distributions?.message ? (
-          <p className="mb-2 text-xs text-red-600">
+          <p className="mb-2 text-sm text-red-600">
             {err.distributions.message}
           </p>
         ) : null}
         {err?.distributions?.root?.message ? (
-          <p className="mb-2 text-xs text-red-600">
+          <p className="mb-2 text-sm text-red-600">
             {err.distributions.root.message}
           </p>
         ) : null}
@@ -834,7 +834,7 @@ function SegmentCard({
                   <span />
                 )}
                 {dErr?.variantKey?.message || dErr?.percent?.message ? (
-                  <p className="col-span-full text-xs text-red-600">
+                  <p className="col-span-full text-sm text-red-600">
                     {dErr?.variantKey?.message ?? dErr?.percent?.message}
                   </p>
                 ) : null}
@@ -849,7 +849,7 @@ function SegmentCard({
 
 function ReadOnlyTag() {
   return (
-    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
+    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-ink-500">
       Read-only
     </span>
   );

@@ -156,25 +156,25 @@ export function SegmentDistribution({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Split into variants
           </span>
           <span
             className={cn(
-              'inline-flex items-center gap-1 text-xs font-medium tabular-nums',
+              'inline-flex items-center gap-1 text-sm font-medium tabular-nums',
               statusClass,
             )}
           >
-            {overAllocated ? <AlertTriangle aria-hidden className="h-3.5 w-3.5" /> : null}
+            {overAllocated ? <AlertTriangle aria-hidden className="h-4 w-4" /> : null}
             {statusText}
           </span>
         </div>
 
-        <ul className="mt-2 flex flex-col gap-1 text-[11px] text-slate-600">
+        <ul className="mt-2 flex flex-col gap-1 text-sm text-slate-600">
           {slices.map((s) => (
-            <li key={`legend-${s.key}`} className="flex items-center gap-1.5">
+            <li key={`legend-${s.key}`} className="flex items-center gap-2">
               <span
-                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                className="inline-block h-3 w-3 shrink-0 rounded-sm"
                 style={{ backgroundColor: s.color.hex }}
               />
               <span className="min-w-0 truncate font-medium text-ink-900">
@@ -186,8 +186,8 @@ export function SegmentDistribution({
             </li>
           ))}
           {undershoot > 0 ? (
-            <li className="flex items-center gap-1.5 text-amber-700">
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm bg-amber-300" />
+            <li className="flex items-center gap-2 text-amber-700">
+              <span className="inline-block h-3 w-3 shrink-0 rounded-sm bg-amber-300" />
               <span className="min-w-0 truncate font-medium">unallocated</span>
               <span className="ml-auto shrink-0 tabular-nums">
                 {formatPct(undershoot)}%
@@ -197,7 +197,7 @@ export function SegmentDistribution({
         </ul>
 
         {overAllocated ? (
-          <p className="mt-2 text-[11px] font-medium text-red-600">
+          <p className="mt-2 text-sm font-medium text-red-600">
             Total exceeds 100%. Reduce distributions by{' '}
             {formatPct(overshoot)}%.
           </p>

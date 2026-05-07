@@ -35,17 +35,17 @@ export function LoginPage() {
       <div className="relative z-10 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-brand-glow">
         <div className="mb-6 flex flex-col items-center text-center">
           <Logo size={128} className="h-32 w-32" />
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-ink-400">
+          <p className="mt-1 text-sm uppercase tracking-[0.18em] text-ink-400">
             Admin panel
           </p>
         </div>
 
-        <h2 className="mb-4 text-center text-sm font-medium text-ink-700">
+        <h2 className="mb-4 text-center text-base font-medium text-ink-700">
           Sign in to continue
         </h2>
 
         {!hasClientId ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
             Set <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in{' '}
             <code className="font-mono">ui/.env</code> to enable sign-in.
           </div>
@@ -76,9 +76,9 @@ export function LoginPage() {
         )}
 
         {submitting ? (
-          <p className="mt-3 text-center text-xs text-ink-500">Exchanging token…</p>
+          <p className="mt-3 text-center text-sm text-ink-500">Exchanging token…</p>
         ) : null}
-        {err ? <p className="mt-3 text-center text-xs text-red-600">{err}</p> : null}
+        {err ? <p className="mt-3 text-center text-sm text-red-600">{err}</p> : null}
       </div>
     </div>
   );

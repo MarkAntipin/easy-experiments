@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::CustomError;
 use crate::validation::Validate;
 
-pub type ApiKeyCache = Cache<String, Arc<ApiKeyRow>>;
+pub type ApiKeyCache = Cache<String, Arc<ApiKeyAuthRow>>;
 
 #[derive(Clone, Debug)]
 pub struct AuthenticatedApiKey {
@@ -14,14 +14,10 @@ pub struct AuthenticatedApiKey {
     pub company_id: String,
 }
 
-#[derive(Serialize, Deserialize, sqlx::FromRow)]
-pub struct ApiKeyRow {
+#[derive(sqlx::FromRow)]
+pub struct ApiKeyAuthRow {
     pub api_key_id: String,
     pub company_id: String,
-    pub name: String,
-    pub key_hash: String,
-    pub key_prefix: String,
-    pub created_at: i64,
 }
 
 const MAX_API_KEY_NAME_LENGTH: usize = 128;
@@ -64,6 +60,14 @@ pub struct CreateApiKeyResponse {
     pub created_at: i64,
 }
 
+#[derive(sqlx::FromRow)]
+pub struct ApiKeyListRow {
+    pub api_key_id: String,
+    pub name: String,
+    pub key_prefix: String,
+    pub created_at: i64,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiKeyListItem {
@@ -73,8 +77,8 @@ pub struct ApiKeyListItem {
     pub created_at: i64,
 }
 
-impl From<ApiKeyRow> for ApiKeyListItem {
-    fn from(row: ApiKeyRow) -> Self {
+impl From<ApiKeyListRow> for ApiKeyListItem {
+    fn from(row: ApiKeyListRow) -> Self {
         Self {
             api_key_id: row.api_key_id,
             name: row.name,
@@ -82,4 +86,9 @@ impl From<ApiKeyRow> for ApiKeyListItem {
             created_at: row.created_at,
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct ApiKeyListResponse {
+    pub items: Vec<ApiKeyListItem>,
 }

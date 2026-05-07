@@ -118,7 +118,7 @@ export function ApiKeysPage() {
         description="Your code uses these keys to ask which variant a user should see."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus aria-hidden className="h-4 w-4" />
+            <Plus aria-hidden className="h-5 w-5" />
             New key
           </Button>
         }
@@ -131,33 +131,33 @@ export function ApiKeysPage() {
         ) : listQuery.data && listQuery.data.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <table className="min-w-full divide-y divide-slate-200 text-base">
+                <thead className="bg-slate-50 text-left text-sm uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">Name</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Prefix</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Created</th>
-                    <th scope="col" className="px-4 py-2 font-medium text-right">Actions</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Name</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Prefix</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Created</th>
+                    <th scope="col" className="px-5 py-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {listQuery.data.map((k) => (
                     <tr key={k.apiKeyId}>
-                      <td className="px-4 py-2.5 font-medium text-slate-900">
+                      <td className="px-5 py-3 font-medium text-slate-900">
                         <div className="flex items-center gap-2">
-                          <KeyRound aria-hidden className="h-4 w-4 text-slate-400" />
+                          <KeyRound aria-hidden className="h-5 w-5 text-slate-400" />
                           {k.name}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                      <td className="px-5 py-3 font-mono text-sm text-slate-700">
                         {k.keyPrefix}…
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500">
+                      <td className="px-5 py-3 text-slate-500">
                         <span title={formatTimestamp(k.createdAt)}>
                           {formatRelative(k.createdAt)}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-5 py-3 text-right">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -179,7 +179,7 @@ export function ApiKeysPage() {
             description="Create a key so your code can ask which variant a user should see."
             action={
               <Button variant="brand" onClick={() => setCreateOpen(true)}>
-                <Plus aria-hidden className="h-4 w-4" />
+                <Plus aria-hidden className="h-5 w-5" />
                 New key
               </Button>
             }
@@ -242,11 +242,11 @@ export function ApiKeysPage() {
       >
         {revealed ? (
           <div className="flex flex-col gap-4">
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
               If you lose this key, you'll need to revoke it and create a new one.
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-2">
-              <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-slate-800">
+            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm text-slate-800">
                 {revealed.key}
               </code>
               <Button
@@ -310,14 +310,14 @@ function UsageSnippets({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">
+          <h3 className="text-base font-semibold text-slate-900">
             How to use this key
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             Send the key in the{' '}
-            <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">
+            <code className="rounded bg-slate-100 px-1 font-mono text-xs">
               X-Api-Key
             </code>{' '}
             header on every evaluate call.
@@ -335,7 +335,7 @@ function UsageSnippets({
         />
       </div>
       <div className="relative">
-        <pre className="max-h-72 overflow-auto bg-slate-900 px-4 py-3 font-mono text-xs leading-relaxed text-slate-100">
+        <pre className="max-h-72 overflow-auto bg-slate-900 px-5 py-4 font-mono text-sm leading-relaxed text-slate-100">
           {code}
         </pre>
         <Button
@@ -344,11 +344,11 @@ function UsageSnippets({
           className="absolute right-2 top-2"
           onClick={() => onCopy(code)}
         >
-          <Copy aria-hidden className="h-3.5 w-3.5" />
+          <Copy aria-hidden className="h-4 w-4" />
           Copy
         </Button>
       </div>
-      <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-500">
+      <div className="border-t border-slate-200 px-5 py-2.5 text-sm text-slate-500">
         Replace{' '}
         <code className="rounded bg-slate-100 px-1 font-mono">homepage_cta</code>{' '}
         with your experiment key, and{' '}

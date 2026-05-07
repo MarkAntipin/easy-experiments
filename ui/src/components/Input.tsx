@@ -8,7 +8,7 @@ import type {
 import { cn } from '@/lib/cn';
 
 const baseField =
-  'block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500';
+  'block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (
@@ -21,7 +21,7 @@ export const Textarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement>
 >(({ className, ...props }, ref) => (
-  <textarea ref={ref} className={cn(baseField, 'min-h-[80px] resize-y font-mono', className)} {...props} />
+  <textarea ref={ref} className={cn(baseField, 'min-h-[96px] resize-y font-mono', className)} {...props} />
 ));
 Textarea.displayName = 'Textarea';
 
@@ -83,24 +83,24 @@ export function Field({
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <label htmlFor={htmlFor} className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+      <label htmlFor={htmlFor} className="flex items-center gap-1.5 text-base font-medium text-slate-700">
         <span>
           {label}
           {required ? <span className="ml-0.5 text-red-500">*</span> : null}
         </span>
         {readOnly ? (
-          <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
+          <span className="rounded bg-ink-100 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-ink-500">
             Read-only
           </span>
         ) : null}
       </label>
       {child}
       {error ? (
-        <p id={errorId} className="text-xs text-red-600">
+        <p id={errorId} className="text-sm text-red-600">
           {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-xs text-slate-500">
+        <p id={hintId} className="text-sm text-slate-500">
           {hint}
         </p>
       ) : null}

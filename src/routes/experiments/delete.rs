@@ -3,7 +3,7 @@ use actix_web::HttpResponse;
 use uuid::Uuid;
 
 use crate::errors::CustomError;
-use crate::models::{AuthenticatedUser, ExperimentsDB, MessageResponse};
+use crate::models::{AuthenticatedUser, ExperimentsDB};
 use crate::services::experiment;
 
 pub async fn delete_experiment(
@@ -13,7 +13,5 @@ pub async fn delete_experiment(
 ) -> Result<HttpResponse, CustomError> {
     let id = id.into_inner().to_string();
     experiment::delete_experiment(&db, &id, &user.company_id).await?;
-    Ok(HttpResponse::Ok().json(MessageResponse {
-        message: "Experiment deleted".to_string(),
-    }))
+    Ok(HttpResponse::NoContent().finish())
 }

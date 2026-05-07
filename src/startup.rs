@@ -158,16 +158,16 @@ pub fn run(
             .wrap(Logger::default())
             .service(
                 web::scope("/admin/v1")
+                .app_data(
+                    web::JsonConfig::default()
+                        .limit(ADMIN_JSON_BODY_LIMIT)
+                        .error_handler(json_validation_error),
+                )
+                .app_data(
+                    web::PathConfig::default().error_handler(path_validation_error),
+                )
                 .service(
                     web::scope("/experiments")
-                        .app_data(
-                            web::JsonConfig::default()
-                                .limit(ADMIN_JSON_BODY_LIMIT)
-                                .error_handler(json_validation_error),
-                        )
-                        .app_data(
-                            web::PathConfig::default().error_handler(path_validation_error),
-                        )
                         .wrap(from_fn(jwt_auth_middleware))
                         .route("", web::post().to(create_experiment))
                         .route("", web::get().to(get_experiments))

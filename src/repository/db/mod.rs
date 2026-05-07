@@ -3,7 +3,8 @@ mod experiments;
 mod users;
 
 pub use api_keys::{
-    db_create_api_key, db_find_api_key_by_hash, db_list_api_keys, db_revoke_api_key, NewApiKey,
+    db_count_api_keys, db_create_api_key, db_find_api_key_by_hash, db_list_api_key_summaries,
+    db_revoke_api_key, CreateApiKeyOutcome, NewApiKey,
 };
 pub use experiments::{
     db_create_experiment, db_delete_experiment, db_get_experiment_by_id, db_get_experiment_by_key,

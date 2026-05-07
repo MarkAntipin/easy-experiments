@@ -183,7 +183,6 @@ fn pick_variant(
 /// FNV-1a is stable across compiler/library versions (unlike `DefaultHasher`)
 /// and has good enough avalanche for non-adversarial bucketing — important so
 /// the rollout salt and variant salt produce statistically independent buckets.
-/// TODO: rewrite
 fn hash_to_bucket(experiment_id: &str, entity_id: &str, salt: &str) -> u32 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;

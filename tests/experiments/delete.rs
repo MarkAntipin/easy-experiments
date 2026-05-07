@@ -15,7 +15,7 @@ async fn draft_soft_deletes_row() {
     let response = app.delete_experiment(&id).await;
 
     // Assert
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
     // Subsequent GET (which filters deleted) should 404.
     assert_eq!(
         app.get_experiment(&id).await.status(),
@@ -84,7 +84,7 @@ async fn stopped_soft_deletes_row() {
     let response = app.delete_experiment(&id).await;
 
     // Assert
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let row: (String,) =
         sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
             .bind(&id)
@@ -126,7 +126,10 @@ async fn repeat_delete_returns_404() {
     // Arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("delete_twice")).await;
-    assert_eq!(app.delete_experiment(&id).await.status(), StatusCode::OK);
+    assert_eq!(
+        app.delete_experiment(&id).await.status(),
+        StatusCode::NO_CONTENT
+    );
 
     // Act
     let response = app.delete_experiment(&id).await;

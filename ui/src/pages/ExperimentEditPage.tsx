@@ -104,9 +104,9 @@ export function ExperimentEditPage() {
         actions={
           <Link
             to={`/experiments/${id}`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
+            className="inline-flex items-center gap-1.5 text-base font-medium text-slate-600 hover:text-slate-900"
           >
-            <ArrowLeft aria-hidden className="h-4 w-4" />
+            <ArrowLeft aria-hidden className="h-5 w-5" />
             Back
           </Link>
         }
