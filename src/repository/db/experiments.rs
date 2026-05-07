@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::errors::CustomError;
 use crate::models::{
-    CachedExperiment, ExperimentRow, ExperimentStatus, ExperimentsDB, Segment, Variant,
+    CachedExperiment, ExperimentListRow, ExperimentRow, ExperimentStatus, ExperimentsDB, Segment,
+    Variant,
 };
 
 /// Hard cap on a single experiment lookup. SQLite reads are normally sub-ms;
@@ -254,7 +255,7 @@ pub async fn db_get_experiments(
     db: &ExperimentsDB,
     status: Option<ExperimentStatus>,
     company_id: &str,
-) -> Result<Vec<ExperimentRow>, CustomError> {
+) -> Result<Vec<ExperimentListRow>, CustomError> {
     match status {
         Some(status_filter) => {
             sqlx::query_as(
@@ -265,17 +266,14 @@ pub async fn db_get_experiments(
                     description,
                     status,
                     primary_metric,
-                    variants,
-                    segments,
                     started_at,
                     stopped_at,
                     created_at,
-                    updated_at,
-                    company_id
+                    updated_at
                 FROM experiments
                 WHERE status = $1
                   AND company_id = $2
-                ORDER BY updated_at DESC
+                ORDER BY updated_at DESC, experiment_id ASC
                 ",
             )
             .bind(status_filter.to_string())
@@ -293,17 +291,14 @@ pub async fn db_get_experiments(
                     description,
                     status,
                     primary_metric,
-                    variants,
-                    segments,
                     started_at,
                     stopped_at,
                     created_at,
-                    updated_at,
-                    company_id
+                    updated_at
                 FROM experiments
                 WHERE company_id = $1
                   AND status != 'deleted'
-                ORDER BY updated_at DESC
+                ORDER BY updated_at DESC, experiment_id ASC
                 ",
             )
             .bind(company_id)
@@ -330,19 +325,20 @@ impl<'a> UpdateExperimentFields<'a> {
             && self.variants.is_none()
             && self.segments.is_none()
     }
-
-    pub fn is_structural(&self) -> bool {
-        self.primary_metric.is_some() || self.variants.is_some() || self.segments.is_some()
-    }
 }
 
 pub enum UpdateExperimentOutcome {
     Updated,
     NotFound,
-    StatusConflict(ExperimentStatus),
     VersionConflict,
 }
 
+/// Status-vs-field policy lives in the service layer; this function only
+/// enforces that the row exists, isn't soft-deleted, and (optionally) hasn't
+/// been mutated since `expected_updated_at`. Any status transition (start /
+/// stop / delete) bumps `updated_at`, so the version check doubles as
+/// protection against status races between the service-layer load and this
+/// write.
 pub async fn db_update_experiment(
     db: &ExperimentsDB,
     id: &str,
@@ -355,7 +351,6 @@ pub async fn db_update_experiment(
     }
 
     let now = Utc::now().timestamp_millis();
-    let structural = fields.is_structural();
 
     let variants_json = fields
         .variants
@@ -390,11 +385,7 @@ pub async fn db_update_experiment(
     qb.push_bind(id);
     qb.push(" AND company_id = ");
     qb.push_bind(company_id);
-    if structural {
-        qb.push(" AND status = 'draft'");
-    } else {
-        qb.push(" AND status != 'deleted'");
-    }
+    qb.push(" AND status != 'deleted'");
     if let Some(expected) = expected_updated_at {
         qb.push(" AND updated_at = ");
         qb.push_bind(expected);
@@ -407,10 +398,9 @@ pub async fn db_update_experiment(
         return Ok(UpdateExperimentOutcome::Updated);
     }
 
-    let existing: Option<(ExperimentStatus, i64)> = sqlx::query_as(
+    let existing: Option<i64> = sqlx::query_scalar(
         "
         SELECT
-            status,
             updated_at
         FROM experiments
         WHERE experiment_id = $1
@@ -425,14 +415,11 @@ pub async fn db_update_experiment(
 
     match existing {
         None => Ok(UpdateExperimentOutcome::NotFound),
-        Some((current_status, current_updated_at)) => {
+        Some(current_updated_at) => {
             if let Some(expected) = expected_updated_at {
                 if current_updated_at != expected {
                     return Ok(UpdateExperimentOutcome::VersionConflict);
                 }
-            }
-            if structural && current_status != ExperimentStatus::Draft {
-                return Ok(UpdateExperimentOutcome::StatusConflict(current_status));
             }
             // No real change occurred (e.g. same values). Treat as success.
             Ok(UpdateExperimentOutcome::Updated)

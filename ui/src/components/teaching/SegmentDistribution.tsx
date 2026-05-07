@@ -165,7 +165,7 @@ export function SegmentDistribution({
               statusClass,
             )}
           >
-            {overAllocated ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
+            {overAllocated ? <AlertTriangle aria-hidden className="h-3.5 w-3.5" /> : null}
             {statusText}
           </span>
         </div>

@@ -2,7 +2,7 @@ import type { ExperimentStatus } from '@/api/types';
 import { cn } from '@/lib/cn';
 
 const STATUS_STYLES: Record<ExperimentStatus, string> = {
-  draft: 'bg-slate-100 text-slate-700 ring-slate-200',
+  draft: 'bg-ink-100 text-ink-700 ring-ink-200',
   running: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   stopped: 'bg-amber-50 text-amber-800 ring-amber-200',
   deleted: 'bg-red-50 text-red-700 ring-red-200',

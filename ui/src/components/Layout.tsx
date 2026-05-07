@@ -18,7 +18,7 @@ function NavItem({
       to={to}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
+          'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
           isActive
             ? 'bg-brand-50 text-brand-700'
             : 'text-ink-500 hover:bg-slate-100 hover:text-ink-900',
@@ -34,7 +34,10 @@ function NavItem({
               isActive ? 'opacity-100' : 'opacity-0',
             )}
           />
-          <Icon className={cn('h-4 w-4', isActive ? 'text-brand-600' : 'text-ink-400 group-hover:text-ink-700')} />
+          <Icon
+            aria-hidden
+            className={cn('h-4 w-4', isActive ? 'text-brand-600' : 'text-ink-400 group-hover:text-ink-700')}
+          />
           {label}
         </>
       )}
@@ -47,6 +50,12 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-700 focus:shadow-md focus:ring-2 focus:ring-brand-500"
+      >
+        Skip to main content
+      </a>
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="flex h-14 items-center gap-2.5 border-b border-slate-200 px-4">
           <LogoMark size={28} />
@@ -55,7 +64,7 @@ export function Layout() {
             <span className="text-ink-900">Experiments</span>
           </span>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav aria-label="Main" className="flex-1 space-y-1 p-3">
           <NavItem to="/experiments" icon={Beaker} label="Experiments" />
           <NavItem to="/api-keys" icon={KeyRound} label="API Keys" />
         </nav>
@@ -70,7 +79,10 @@ export function Layout() {
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="grid h-7 w-7 place-items-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
+                <div
+                  aria-hidden
+                  className="grid h-7 w-7 place-items-center rounded-full bg-brand-gradient text-xs font-semibold text-white"
+                >
                   {session.user.email.slice(0, 1).toUpperCase()}
                 </div>
               )}
@@ -87,14 +99,14 @@ export function Layout() {
           <button
             type="button"
             onClick={logout}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-ink-500 hover:bg-slate-100 hover:text-ink-900"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-ink-500 transition hover:bg-slate-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut aria-hidden className="h-4 w-4" />
             Sign out
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden">
+      <main id="main-content" className="flex-1 overflow-x-hidden">
         <Outlet />
       </main>
     </div>

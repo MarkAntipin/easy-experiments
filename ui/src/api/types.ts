@@ -57,6 +57,10 @@ export interface ExperimentDetail extends ExperimentSummary {
   segments: Segment[];
 }
 
+export interface ExperimentListResponse {
+  items: ExperimentSummary[];
+}
+
 export interface CreateExperimentRequest {
   key: string;
   description?: string | null;

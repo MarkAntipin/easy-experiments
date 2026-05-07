@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::CustomError;
 
-use super::db::ExperimentRow;
+use super::db::{ExperimentListRow, ExperimentRow};
 use super::domain::{Segment, Variant};
+use super::status::ExperimentStatus;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,7 +18,7 @@ pub struct ExperimentResponse {
     pub experiment_id: String,
     pub key: String,
     pub description: Option<String>,
-    pub status: String,
+    pub status: ExperimentStatus,
     pub primary_metric: String,
     pub variants: Vec<Variant>,
     pub segments: Vec<Segment>,
@@ -40,7 +41,7 @@ impl ExperimentResponse {
             experiment_id: experiment.experiment_id,
             key: experiment.key,
             description: experiment.description,
-            status: experiment.status.to_string(),
+            status: experiment.status,
             primary_metric: experiment.primary_metric,
             variants,
             segments,
@@ -58,7 +59,7 @@ pub struct ExperimentListItem {
     pub experiment_id: String,
     pub key: String,
     pub description: Option<String>,
-    pub status: String,
+    pub status: ExperimentStatus,
     pub primary_metric: String,
     pub started_at: Option<i64>,
     pub stopped_at: Option<i64>,
@@ -66,13 +67,13 @@ pub struct ExperimentListItem {
     pub updated_at: i64,
 }
 
-impl From<ExperimentRow> for ExperimentListItem {
-    fn from(row: ExperimentRow) -> Self {
+impl From<ExperimentListRow> for ExperimentListItem {
+    fn from(row: ExperimentListRow) -> Self {
         Self {
             experiment_id: row.experiment_id,
             key: row.key,
             description: row.description,
-            status: row.status.to_string(),
+            status: row.status,
             primary_metric: row.primary_metric,
             started_at: row.started_at,
             stopped_at: row.stopped_at,
@@ -80,4 +81,9 @@ impl From<ExperimentRow> for ExperimentListItem {
             updated_at: row.updated_at,
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct ExperimentListResponse {
+    pub items: Vec<ExperimentListItem>,
 }

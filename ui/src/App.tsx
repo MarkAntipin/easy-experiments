@@ -74,7 +74,7 @@ export default function App() {
           </AuthProvider>
         </BrowserRouter>
       </GoogleOAuthProvider>
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="bottom-right" />
       {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
     </QueryClientProvider>
   );

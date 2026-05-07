@@ -7,8 +7,22 @@ import { ApiError } from '@/api/client';
 import { PageBody, PageHeader } from '@/components/PageHeader';
 import { PageLoader } from '@/components/Spinner';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { ExperimentForm } from '@/forms/ExperimentForm';
+import { ExperimentForm, type ExperimentFormLockMode } from '@/forms/ExperimentForm';
 import type { CreateExperimentRequest, UpdateExperimentRequest } from '@/api/types';
+
+function lockModeForStatus(status: string): ExperimentFormLockMode {
+  if (status === 'draft') return 'unlocked';
+  if (status === 'running') return 'rampUpOnly';
+  return 'fullyLocked';
+}
+
+function headerCopyForStatus(status: string): string {
+  if (status === 'draft') return 'Draft experiment — all fields editable.';
+  if (status === 'running') {
+    return 'Running — description and rollout % are editable. Variants, primary metric, and segment shape are locked.';
+  }
+  return 'Stopped — only description is editable. Create a new experiment to test something else.';
+}
 
 export function ExperimentEditPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -57,20 +71,28 @@ export function ExperimentEditPage() {
   const exp = query.data;
   if (!exp) return null;
 
-  const locked = exp.status !== 'draft';
+  const lockMode = lockModeForStatus(exp.status);
 
   const onSubmit = (full: CreateExperimentRequest) => {
-    const payload: UpdateExperimentRequest = locked
-      ? {
-          description: full.description ?? null,
-          primaryMetric: full.primaryMetric,
-        }
-      : {
-          description: full.description ?? null,
-          primaryMetric: full.primaryMetric,
-          variants: full.variants,
-          segments: full.segments,
-        };
+    let payload: UpdateExperimentRequest;
+    if (lockMode === 'unlocked') {
+      payload = {
+        description: full.description ?? null,
+        primaryMetric: full.primaryMetric,
+        variants: full.variants,
+        segments: full.segments,
+      };
+    } else if (lockMode === 'rampUpOnly') {
+      // Description and segments (rollout-up). The backend validates that
+      // segments differ only by non-decreasing rolloutPercent and no-ops if
+      // values are unchanged.
+      payload = {
+        description: full.description ?? null,
+        segments: full.segments,
+      };
+    } else {
+      payload = { description: full.description ?? null };
+    }
     mutation.mutate(payload);
   };
 
@@ -78,17 +100,13 @@ export function ExperimentEditPage() {
     <>
       <PageHeader
         title={`Edit: ${exp.key}`}
-        description={
-          locked
-            ? 'Variants and segments are read-only once the experiment has started. You can still edit description and primary metric.'
-            : 'Draft experiment — all fields editable.'
-        }
+        description={headerCopyForStatus(exp.status)}
         actions={
           <Link
             to={`/experiments/${id}`}
             className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft aria-hidden className="h-4 w-4" />
             Back
           </Link>
         }
@@ -97,7 +115,7 @@ export function ExperimentEditPage() {
         <ExperimentForm
           mode="edit"
           initial={exp}
-          locked={locked}
+          lockMode={lockMode}
           submitLabel="Save changes"
           submitting={mutation.isPending}
           onSubmit={onSubmit}

@@ -27,18 +27,23 @@ import type {
   Variant,
 } from '@/api/types';
 
+/**
+ * Field-level edit policy:
+ *   - `unlocked`: every field is editable (create + draft edit).
+ *   - `rampUpOnly`: variants, key, primaryMetric, and segment shape are locked,
+ *     but each segment's `rolloutPercent` and the description stay editable.
+ *     Used while the experiment is running.
+ *   - `fullyLocked`: only the description is editable. Used after stop.
+ */
+export type ExperimentFormLockMode = 'unlocked' | 'rampUpOnly' | 'fullyLocked';
+
 export interface ExperimentFormProps {
   initial?: ExperimentDetail;
   mode: 'create' | 'edit';
   submitting: boolean;
   submitLabel: string;
   onSubmit: (payload: CreateExperimentRequest) => void | Promise<void>;
-  /**
-   * If true, "key", "variants", and "segments" cannot be changed. Used when
-   * editing an experiment that is running/stopped — only description and
-   * primaryMetric edits are forwarded to the API in that case.
-   */
-  locked?: boolean;
+  lockMode?: ExperimentFormLockMode;
 }
 
 function emptyDefaults(): ExperimentFormValues {
@@ -144,8 +149,11 @@ export function ExperimentForm({
   submitting,
   submitLabel,
   onSubmit,
-  locked,
+  lockMode = 'unlocked',
 }: ExperimentFormProps) {
+  const shapeLocked = lockMode !== 'unlocked';
+  const rolloutLocked = lockMode === 'fullyLocked';
+
   const defaultValues = useMemo<ExperimentFormValues>(
     () => (initial ? detailToValues(initial) : emptyDefaults()),
     [initial],
@@ -179,6 +187,8 @@ export function ExperimentForm({
       onSubmit={handleSubmit((values) => onSubmit(valuesToPayload(values)))}
       className="flex flex-col gap-6"
     >
+      {lockMode !== 'unlocked' ? <LockBanner mode={lockMode} /> : null}
+
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-semibold text-slate-900">Basics</h2>
         <p className="mb-4 text-xs text-slate-500">
@@ -190,13 +200,18 @@ export function ExperimentForm({
             label="Key"
             htmlFor="key"
             required
+            readOnly={shapeLocked || mode === 'edit'}
             error={errors.key?.message}
-            hint="Unique identifier used at evaluation time."
+            hint={
+              shapeLocked || mode === 'edit'
+                ? "Can't be changed after creation."
+                : 'Unique identifier used at evaluation time.'
+            }
           >
             <Input
               id="key"
               placeholder="homepage_cta"
-              disabled={locked || mode === 'edit'}
+              disabled={shapeLocked || mode === 'edit'}
               {...register('key')}
             />
           </Field>
@@ -205,12 +220,16 @@ export function ExperimentForm({
             htmlFor="primaryMetric"
             required
             error={errors.primaryMetric?.message}
-            hint="Identifier for the outcome you're optimizing — track it in your analytics so you can compare variants."
+            hint={
+              shapeLocked
+                ? "Can't be changed once the experiment has started."
+                : "Identifier for the outcome you're optimizing — track it in your analytics so you can compare variants."
+            }
           >
             <Input
               id="primaryMetric"
               placeholder="signup_conversion"
-              disabled={locked}
+              disabled={shapeLocked}
               {...register('primaryMetric')}
             />
           </Field>
@@ -233,7 +252,7 @@ export function ExperimentForm({
       <VariantsSection
         form={form}
         array={variantsArray}
-        locked={locked}
+        locked={shapeLocked}
         onControlChange={(idx) => {
           // Exactly one control: unset other flags when a new control is picked.
           watchedVariants.forEach((_, i) => {
@@ -249,7 +268,8 @@ export function ExperimentForm({
         form={form}
         array={segmentsArray}
         variantKeys={watchedVariants.map((v) => v.key).filter(Boolean)}
-        locked={locked}
+        shapeLocked={shapeLocked}
+        rolloutLocked={rolloutLocked}
       />
 
       <div className="flex items-center justify-end gap-2">
@@ -258,6 +278,25 @@ export function ExperimentForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function LockBanner({ mode }: { mode: ExperimentFormLockMode }) {
+  if (mode === 'rampUpOnly') {
+    return (
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <strong className="font-semibold">Running.</strong> You can edit the
+        description and ramp up each segment&rsquo;s rollout %. Everything else
+        is locked to keep the analysis comparable. Rollout can only go up,
+        never down.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+      <strong className="font-semibold">Stopped.</strong> Only the description
+      is editable. To run a new test, create a new experiment.
+    </div>
   );
 }
 
@@ -281,7 +320,10 @@ function VariantsSection({
     <section className="rounded-lg border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Variants</h2>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            Variants
+            {locked ? <ReadOnlyTag /> : null}
+          </h2>
           <p className="text-xs text-slate-500">
             The different versions you want to test. Mark one as the control —
             the others will be compared against it.
@@ -295,7 +337,7 @@ function VariantsSection({
               array.append({ key: '', isControl: false, config: '{}' })
             }
           >
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden className="h-4 w-4" />
             Add variant
           </Button>
         ) : null}
@@ -363,7 +405,7 @@ function VariantsSection({
                     onClick={() => array.remove(idx)}
                     aria-label="Remove variant"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 aria-hidden className="h-4 w-4" />
                   </Button>
                 ) : null}
               </div>
@@ -389,28 +431,39 @@ function SegmentsSection({
   form,
   array,
   variantKeys,
-  locked,
+  shapeLocked,
+  rolloutLocked,
 }: {
   form: UseFormReturn<ExperimentFormValues>;
   array: ReturnType<typeof useFieldArray<ExperimentFormValues, 'segments'>>;
   variantKeys: string[];
-  locked?: boolean;
+  shapeLocked: boolean;
+  rolloutLocked: boolean;
 }) {
   const { formState: { errors } } = form;
   const rootError = errors.segments?.message ?? errors.segments?.root?.message;
+  // Adding/removing segments is structural — locked whenever shape is locked.
+  const canAddRemove = !shapeLocked;
+  // Show a dedicated "Read-only" badge only when the segment is fully locked.
+  // In rampUpOnly the rollout is editable, so a flat "Read-only" tag would
+  // mislead.
+  const showReadOnlyTag = shapeLocked && rolloutLocked;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Segments</h2>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            Segments
+            {showReadOnlyTag ? <ReadOnlyTag /> : null}
+          </h2>
           <p className="text-xs text-slate-500">
             Decide who sees this experiment and how they&rsquo;re split. Lower
             priority numbers are checked first; the first matching segment
             wins.
           </p>
         </div>
-        {!locked ? (
+        {canAddRemove ? (
           <Button
             size="sm"
             variant="secondary"
@@ -439,7 +492,7 @@ function SegmentsSection({
               });
             }}
           >
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden className="h-4 w-4" />
             Add segment
           </Button>
         ) : null}
@@ -479,9 +532,10 @@ function SegmentsSection({
             index={idx}
             form={form}
             variantKeys={variantKeys}
-            locked={locked}
+            shapeLocked={shapeLocked}
+            rolloutLocked={rolloutLocked}
             onRemove={() => array.remove(idx)}
-            canRemove={array.fields.length > 1}
+            canRemove={canAddRemove && array.fields.length > 1}
           />
         ))}
       </div>
@@ -493,14 +547,16 @@ function SegmentCard({
   index,
   form,
   variantKeys,
-  locked,
+  shapeLocked,
+  rolloutLocked,
   onRemove,
   canRemove,
 }: {
   index: number;
   form: UseFormReturn<ExperimentFormValues>;
   variantKeys: string[];
-  locked?: boolean;
+  shapeLocked: boolean;
+  rolloutLocked: boolean;
   onRemove: () => void;
   canRemove: boolean;
 }) {
@@ -530,14 +586,14 @@ function SegmentCard({
         <h3 className="text-sm font-medium text-slate-800">
           Segment #{index + 1}
         </h3>
-        {!locked && canRemove ? (
+        {canRemove ? (
           <Button
             size="sm"
             variant="ghost"
             onClick={onRemove}
             aria-label="Remove segment"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 aria-hidden className="h-4 w-4" />
           </Button>
         ) : null}
       </div>
@@ -562,7 +618,7 @@ function SegmentCard({
           <Input
             type="number"
             min={0}
-            disabled={locked}
+            disabled={shapeLocked}
             {...register(`segments.${index}.priority`, { valueAsNumber: true })}
           />
         </Field>
@@ -570,13 +626,17 @@ function SegmentCard({
           label="Rollout %"
           required
           error={err?.rolloutPercent?.message}
-          hint="Portion of eligible users bucketed into this segment."
+          hint={
+            shapeLocked && !rolloutLocked
+              ? 'Adjustable while running — can only increase, not decrease.'
+              : 'Portion of eligible users bucketed into this segment.'
+          }
         >
           <Input
             type="number"
             min={0}
             max={100}
-            disabled={locked}
+            disabled={rolloutLocked}
             {...register(`segments.${index}.rolloutPercent`, {
               valueAsNumber: true,
             })}
@@ -598,7 +658,7 @@ function SegmentCard({
               object you pass to evaluate (e.g. country, plan_tier, deviceType).
             </p>
           </div>
-          {!locked ? (
+          {!shapeLocked ? (
             <Button
               size="sm"
               variant="ghost"
@@ -610,7 +670,7 @@ function SegmentCard({
                 })
               }
             >
-              <Plus className="h-4 w-4" />
+              <Plus aria-hidden className="h-4 w-4" />
               Add constraint
             </Button>
           ) : null}
@@ -630,7 +690,7 @@ function SegmentCard({
                 >
                   <Input
                     placeholder="country"
-                    disabled={locked}
+                    disabled={shapeLocked}
                     aria-invalid={!!cErr?.property}
                     {...register(`segments.${index}.constraints.${cIdx}.property`)}
                   />
@@ -638,7 +698,7 @@ function SegmentCard({
                     control={control}
                     name={`segments.${index}.constraints.${cIdx}.operator`}
                     render={({ field }) => (
-                      <Select {...field} disabled={locked}>
+                      <Select {...field} disabled={shapeLocked}>
                         {constraintOperators.map((op) => (
                           <option key={op} value={op}>
                             {operatorLabels[op]}
@@ -649,18 +709,18 @@ function SegmentCard({
                   />
                   <Input
                     placeholder='value (use "a, b, c" for "Is one of")'
-                    disabled={locked}
+                    disabled={shapeLocked}
                     aria-invalid={!!cErr?.value}
                     {...register(`segments.${index}.constraints.${cIdx}.value`)}
                   />
-                  {!locked ? (
+                  {!shapeLocked ? (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => constraintArray.remove(cIdx)}
                       aria-label="Remove constraint"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 aria-hidden className="h-4 w-4" />
                     </Button>
                   ) : null}
                   {cErr?.property?.message || cErr?.value?.message ? (
@@ -691,12 +751,12 @@ function SegmentCard({
                     : 'text-amber-600',
               )}
             >
-              {sum > 100 ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
+              {sum > 100 ? <AlertTriangle aria-hidden className="h-3.5 w-3.5" /> : null}
               Total: {sum}%
               {sum > 100 ? <span> · over by {overshoot}%</span> : null}
               {sum < 100 ? <span> · {undershoot}% unallocated</span> : null}
             </span>
-            {!locked ? (
+            {!shapeLocked ? (
               <Button
                 size="sm"
                 variant="ghost"
@@ -708,7 +768,7 @@ function SegmentCard({
                 }
                 disabled={variantKeys.length === 0}
               >
-                <Plus className="h-4 w-4" />
+                <Plus aria-hidden className="h-4 w-4" />
                 Add distribution
               </Button>
             ) : null}
@@ -738,7 +798,7 @@ function SegmentCard({
                   render={({ field }) => (
                     <Select
                       {...field}
-                      disabled={locked}
+                      disabled={shapeLocked}
                       aria-invalid={!!dErr?.variantKey}
                     >
                       <option value="">— pick variant —</option>
@@ -754,21 +814,21 @@ function SegmentCard({
                   type="number"
                   min={0}
                   max={100}
-                  disabled={locked}
+                  disabled={shapeLocked}
                   aria-invalid={!!dErr?.percent}
                   {...register(
                     `segments.${index}.distributions.${dIdx}.percent`,
                     { valueAsNumber: true },
                   )}
                 />
-                {!locked && distArray.fields.length > 1 ? (
+                {!shapeLocked && distArray.fields.length > 1 ? (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => distArray.remove(dIdx)}
                     aria-label="Remove distribution"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 aria-hidden className="h-4 w-4" />
                   </Button>
                 ) : (
                   <span />
@@ -784,5 +844,13 @@ function SegmentCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function ReadOnlyTag() {
+  return (
+    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
+      Read-only
+    </span>
   );
 }

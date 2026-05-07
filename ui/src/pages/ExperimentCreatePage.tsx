@@ -34,7 +34,7 @@ export function ExperimentCreatePage() {
             to="/experiments"
             className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft aria-hidden className="h-4 w-4" />
             Back
           </Link>
         }

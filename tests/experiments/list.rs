@@ -18,7 +18,8 @@ async fn returns_all_for_company() {
 
     // Assert
     assert_eq!(response.status(), StatusCode::OK);
-    let items: Vec<Value> = response.json().await.unwrap();
+    let body: Value = response.json().await.unwrap();
+    let items = body["items"].as_array().expect("items array");
     assert_eq!(items.len(), 2);
     let keys: Vec<&str> = items.iter().map(|i| i["key"].as_str().unwrap()).collect();
     assert!(keys.contains(&"exp_a"));
@@ -41,7 +42,8 @@ async fn filters_by_status() {
 
     // Assert
     assert_eq!(response.status(), StatusCode::OK);
-    let items: Vec<Value> = response.json().await.unwrap();
+    let body: Value = response.json().await.unwrap();
+    let items = body["items"].as_array().expect("items array");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["experimentId"], running_id);
     assert_eq!(items[0]["status"], "running");

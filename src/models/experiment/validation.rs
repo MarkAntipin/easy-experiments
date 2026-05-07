@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::errors::CustomError;
 
@@ -40,6 +40,47 @@ pub(crate) fn validate_experiment_state(
     validate_primary_metric(primary_metric)?;
     validate_variants(variants)?;
     validate_segments(segments, variants)?;
+    Ok(())
+}
+
+pub(crate) fn validate_segments_compatible_for_running(
+    old: &[Segment],
+    new: &[Segment],
+) -> Result<(), CustomError> {
+    if old.len() != new.len() {
+        return Err(CustomError::ConflictError(
+            "Cannot add or remove segments on a running experiment".into(),
+        ));
+    }
+    let old_by_priority: HashMap<i32, &Segment> =
+        old.iter().map(|s| (s.priority, s)).collect();
+
+    for new_seg in new {
+        let old_seg = old_by_priority.get(&new_seg.priority).ok_or_else(|| {
+            CustomError::ConflictError(format!(
+                "Cannot change segment priority on a running experiment (priority {} did not exist)",
+                new_seg.priority
+            ))
+        })?;
+        if new_seg.constraints != old_seg.constraints {
+            return Err(CustomError::ConflictError(format!(
+                "Cannot change segment constraints on a running experiment (priority {})",
+                new_seg.priority
+            )));
+        }
+        if new_seg.distributions != old_seg.distributions {
+            return Err(CustomError::ConflictError(format!(
+                "Cannot change segment distributions on a running experiment (priority {})",
+                new_seg.priority
+            )));
+        }
+        if new_seg.rollout_percent < old_seg.rollout_percent {
+            return Err(CustomError::ConflictError(format!(
+                "Cannot reduce rolloutPercent on a running experiment (priority {}: {} → {})",
+                new_seg.priority, old_seg.rollout_percent, new_seg.rollout_percent
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -574,6 +615,105 @@ mod tests {
                 "must be a number",
             );
         }
+    }
+
+    // ---- validate_segments_compatible_for_running ----
+
+    fn ramp_segment(priority: i32, rollout: u32) -> Segment {
+        Segment {
+            priority,
+            rollout_percent: rollout,
+            constraints: vec![],
+            distributions: vec![
+                distribution("control", 50),
+                distribution("treatment", 50),
+            ],
+        }
+    }
+
+    #[test]
+    fn ramp_up_allows_same_rollout() {
+        let old = vec![ramp_segment(0, 25)];
+        let new = vec![ramp_segment(0, 25)];
+        assert!(validate_segments_compatible_for_running(&old, &new).is_ok());
+    }
+
+    #[test]
+    fn ramp_up_allows_increased_rollout() {
+        let old = vec![ramp_segment(0, 25)];
+        let new = vec![ramp_segment(0, 75)];
+        assert!(validate_segments_compatible_for_running(&old, &new).is_ok());
+    }
+
+    #[test]
+    fn ramp_up_rejects_decreased_rollout() {
+        let old = vec![ramp_segment(0, 50)];
+        let new = vec![ramp_segment(0, 10)];
+        match validate_segments_compatible_for_running(&old, &new) {
+            Err(CustomError::ConflictError(msg)) => assert!(msg.contains("reduce rolloutPercent")),
+            other => panic!("expected ConflictError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ramp_up_rejects_added_segment() {
+        let old = vec![ramp_segment(0, 100)];
+        let new = vec![ramp_segment(0, 100), ramp_segment(1, 50)];
+        match validate_segments_compatible_for_running(&old, &new) {
+            Err(CustomError::ConflictError(msg)) => assert!(msg.contains("add or remove")),
+            other => panic!("expected ConflictError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ramp_up_rejects_changed_priority() {
+        // Same length, but priority key shifted — old_by_priority lookup fails.
+        let old = vec![ramp_segment(0, 100)];
+        let new = vec![ramp_segment(1, 100)];
+        match validate_segments_compatible_for_running(&old, &new) {
+            Err(CustomError::ConflictError(msg)) => assert!(msg.contains("segment priority")),
+            other => panic!("expected ConflictError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ramp_up_rejects_changed_distributions() {
+        let mut old_seg = ramp_segment(0, 100);
+        old_seg.distributions = vec![distribution("control", 50), distribution("treatment", 50)];
+        let mut new_seg = ramp_segment(0, 100);
+        new_seg.distributions = vec![distribution("control", 30), distribution("treatment", 70)];
+        match validate_segments_compatible_for_running(&[old_seg], &[new_seg]) {
+            Err(CustomError::ConflictError(msg)) => assert!(msg.contains("distributions")),
+            other => panic!("expected ConflictError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ramp_up_rejects_changed_constraints() {
+        let mut old_seg = ramp_segment(0, 100);
+        old_seg.constraints = vec![Constraint {
+            property: "country".into(),
+            operator: ConstraintOperator::Eq,
+            value: json!("US"),
+        }];
+        let mut new_seg = ramp_segment(0, 100);
+        new_seg.constraints = vec![Constraint {
+            property: "country".into(),
+            operator: ConstraintOperator::Eq,
+            value: json!("DE"),
+        }];
+        match validate_segments_compatible_for_running(&[old_seg], &[new_seg]) {
+            Err(CustomError::ConflictError(msg)) => assert!(msg.contains("constraints")),
+            other => panic!("expected ConflictError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ramp_up_orders_independently() {
+        // Old in [0, 1] order; new in [1, 0] order. Should still match by priority.
+        let old = vec![ramp_segment(0, 25), ramp_segment(1, 50)];
+        let new = vec![ramp_segment(1, 60), ramp_segment(0, 75)];
+        assert!(validate_segments_compatible_for_running(&old, &new).is_ok());
     }
 
     #[test]

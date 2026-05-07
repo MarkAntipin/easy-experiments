@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Variant {
     pub key: String,
@@ -13,7 +13,7 @@ fn default_config() -> serde_json::Value {
     serde_json::json!({})
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Segment {
     pub priority: i32,
@@ -36,14 +36,14 @@ pub enum ConstraintOperator {
     NotIn,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Constraint {
     pub property: String,
     pub operator: ConstraintOperator,
     pub value: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Distribution {
     pub variant_key: String,

@@ -11,4 +11,4 @@ pub use request::*;
 pub use response::*;
 pub use status::*;
 pub use validation::{MAX_IDEMPOTENCY_KEY_LENGTH, MAX_KEY_LENGTH};
-pub(crate) use validation::validate_experiment_state;
+pub(crate) use validation::{validate_experiment_state, validate_segments_compatible_for_running};

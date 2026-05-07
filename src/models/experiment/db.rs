@@ -40,3 +40,16 @@ pub struct ExperimentRow {
     pub updated_at: i64,
     pub company_id: String,
 }
+
+#[derive(sqlx::FromRow)]
+pub struct ExperimentListRow {
+    pub experiment_id: String,
+    pub key: String,
+    pub description: Option<String>,
+    pub status: ExperimentStatus,
+    pub primary_metric: String,
+    pub started_at: Option<i64>,
+    pub stopped_at: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}

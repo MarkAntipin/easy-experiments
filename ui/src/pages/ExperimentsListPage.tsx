@@ -9,8 +9,8 @@ import { StatusBadge } from '@/components/Badge';
 import { PageBody, PageHeader } from '@/components/PageHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { PageLoader } from '@/components/Spinner';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import { formatRelative } from '@/lib/format';
-import { cn } from '@/lib/cn';
 
 type Filter = 'all' | Exclude<ExperimentStatus, 'deleted'>;
 
@@ -37,79 +37,71 @@ export function ExperimentsListPage() {
         actions={
           <Link to="/experiments/new">
             <Button>
-              <Plus className="h-4 w-4" />
+              <Plus aria-hidden className="h-4 w-4" />
               New experiment
             </Button>
           </Link>
         }
       />
       <PageBody>
-        <div className="mb-4 inline-flex rounded-md bg-slate-100 p-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFilter(f.value)}
-              className={cn(
-                'rounded px-3 py-1 text-sm font-medium transition',
-                filter === f.value
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="Filter experiments by status"
+          className="mb-4"
+          options={FILTERS}
+          value={filter}
+          onChange={setFilter}
+        />
 
         {query.isLoading ? (
           <PageLoader />
         ) : query.isError ? (
           <ErrorAlert error={query.error} title="Failed to load experiments" />
-        ) : query.data && query.data.length > 0 ? (
+        ) : query.data && query.data.items.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-4 py-2 font-medium">Key</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Primary metric</th>
-                  <th className="px-4 py-2 font-medium">Created</th>
-                  <th className="px-4 py-2 font-medium">Updated</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {query.data.map((exp) => (
-                  <tr key={exp.experimentId} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5">
-                      <Link
-                        to={`/experiments/${exp.experimentId}`}
-                        className="font-medium text-brand-700 hover:underline"
-                      >
-                        {exp.key}
-                      </Link>
-                      {exp.description ? (
-                        <div className="max-w-md truncate text-xs text-slate-500">
-                          {exp.description}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <StatusBadge status={exp.status} />
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
-                      {exp.primaryMetric}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500">
-                      {formatRelative(exp.createdAt)}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500">
-                      {formatRelative(exp.updatedAt)}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="px-4 py-2 font-medium">Key</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Status</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Primary metric</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Created</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Updated</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {query.data.items.map((exp) => (
+                    <tr key={exp.experimentId} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        <Link
+                          to={`/experiments/${exp.experimentId}`}
+                          className="font-medium text-brand-700 hover:underline"
+                        >
+                          {exp.key}
+                        </Link>
+                        {exp.description ? (
+                          <div className="max-w-md truncate text-xs text-slate-500">
+                            {exp.description}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <StatusBadge status={exp.status} />
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                        {exp.primaryMetric}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500">
+                        {formatRelative(exp.createdAt)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500">
+                        {formatRelative(exp.updatedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
@@ -123,8 +115,8 @@ export function ExperimentsListPage() {
             </p>
             <div className="mt-4">
               <Link to="/experiments/new">
-                <Button>
-                  <Plus className="h-4 w-4" />
+                <Button variant="brand">
+                  <Plus aria-hidden className="h-4 w-4" />
                   Create your first experiment
                 </Button>
               </Link>

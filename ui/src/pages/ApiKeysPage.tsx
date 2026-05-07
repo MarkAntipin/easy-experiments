@@ -12,6 +12,7 @@ import { Field, Input } from '@/components/Input';
 import { PageLoader } from '@/components/Spinner';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { EmptyState } from '@/components/EmptyState';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import { formatRelative, formatTimestamp } from '@/lib/format';
 
 const EVALUATE_PATH = '/api/v1/experiments/evaluate';
@@ -117,7 +118,7 @@ export function ApiKeysPage() {
         description="Your code uses these keys to ask which variant a user should see."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden className="h-4 w-4" />
             New key
           </Button>
         }
@@ -129,54 +130,56 @@ export function ApiKeysPage() {
           <ErrorAlert error={listQuery.error} title="Failed to load keys" />
         ) : listQuery.data && listQuery.data.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-4 py-2 font-medium">Prefix</th>
-                  <th className="px-4 py-2 font-medium">Created</th>
-                  <th className="px-4 py-2 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {listQuery.data.map((k) => (
-                  <tr key={k.apiKeyId}>
-                    <td className="px-4 py-2.5 font-medium text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <KeyRound className="h-4 w-4 text-slate-400" />
-                        {k.name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
-                      {k.keyPrefix}…
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500">
-                      <span title={formatTimestamp(k.createdAt)}>
-                        {formatRelative(k.createdAt)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setConfirmRevoke(k)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Revoke
-                      </Button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 font-medium">Name</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Prefix</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Created</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listQuery.data.map((k) => (
+                    <tr key={k.apiKeyId}>
+                      <td className="px-4 py-2.5 font-medium text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <KeyRound aria-hidden className="h-4 w-4 text-slate-400" />
+                          {k.name}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                        {k.keyPrefix}…
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500">
+                        <span title={formatTimestamp(k.createdAt)}>
+                          {formatRelative(k.createdAt)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirmRevoke(k)}
+                        >
+                          <Trash2 aria-hidden className="h-4 w-4" />
+                          Revoke
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <EmptyState
             title="No API keys yet"
             description="Create a key so your code can ask which variant a user should see."
             action={
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" />
+              <Button variant="brand" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden className="h-4 w-4" />
                 New key
               </Button>
             }
@@ -251,7 +254,7 @@ export function ApiKeysPage() {
                 variant="secondary"
                 onClick={() => copyToClipboard(revealed.key)}
               >
-                <Copy className="h-4 w-4" />
+                <Copy aria-hidden className="h-4 w-4" />
                 Copy
               </Button>
             </div>
@@ -320,30 +323,16 @@ function UsageSnippets({
             header on every evaluate call.
           </p>
         </div>
-        <div className="inline-flex rounded-md bg-slate-100 p-0.5">
-          <button
-            type="button"
-            onClick={() => setTab('curl')}
-            className={
-              tab === 'curl'
-                ? 'rounded px-2.5 py-1 text-xs font-medium bg-white text-slate-900 shadow-sm'
-                : 'rounded px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-slate-800'
-            }
-          >
-            curl
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('js')}
-            className={
-              tab === 'js'
-                ? 'rounded px-2.5 py-1 text-xs font-medium bg-white text-slate-900 shadow-sm'
-                : 'rounded px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-slate-800'
-            }
-          >
-            JavaScript
-          </button>
-        </div>
+        <SegmentedControl
+          ariaLabel="Code snippet language"
+          size="sm"
+          options={[
+            { value: 'curl', label: 'curl' },
+            { value: 'js', label: 'JavaScript' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
       <div className="relative">
         <pre className="max-h-72 overflow-auto bg-slate-900 px-4 py-3 font-mono text-xs leading-relaxed text-slate-100">
@@ -355,7 +344,7 @@ function UsageSnippets({
           className="absolute right-2 top-2"
           onClick={() => onCopy(code)}
         >
-          <Copy className="h-3.5 w-3.5" />
+          <Copy aria-hidden className="h-3.5 w-3.5" />
           Copy
         </Button>
       </div>

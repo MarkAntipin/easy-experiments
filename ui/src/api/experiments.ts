@@ -3,16 +3,16 @@ import type {
   CreateExperimentRequest,
   CreateExperimentResponse,
   ExperimentDetail,
+  ExperimentListResponse,
   ExperimentStatus,
-  ExperimentSummary,
   MessageResponse,
   UpdateExperimentRequest,
 } from './types';
 
 export function listExperiments(
   status?: Exclude<ExperimentStatus, 'deleted'>,
-): Promise<ExperimentSummary[]> {
-  return request<ExperimentSummary[]>('/admin/v1/experiments', {
+): Promise<ExperimentListResponse> {
+  return request<ExperimentListResponse>('/admin/v1/experiments', {
     query: status ? { status } : undefined,
   });
 }

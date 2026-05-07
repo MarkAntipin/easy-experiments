@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::errors::CustomError;
 use crate::models::{
-    AuthenticatedUser, ExperimentListItem, ExperimentResponse, ExperimentsDB,
-    GetExperimentsQueryParams,
+    AuthenticatedUser, ExperimentListItem, ExperimentListResponse, ExperimentResponse,
+    ExperimentsDB, GetExperimentsQueryParams,
 };
 use crate::services::experiment;
 
@@ -27,5 +27,5 @@ pub async fn get_experiments(
     let rows =
         experiment::list_experiments(&db, query.status.clone(), &user.company_id).await?;
     let items: Vec<ExperimentListItem> = rows.into_iter().map(Into::into).collect();
-    Ok(HttpResponse::Ok().json(items))
+    Ok(HttpResponse::Ok().json(ExperimentListResponse { items }))
 }
