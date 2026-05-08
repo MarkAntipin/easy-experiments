@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -90,17 +90,22 @@ impl EventSink for MpscEventSink {
             event.entity_id.clone(),
         );
 
-        if self.dedup_cache.contains_key(&key) {
+        // Atomic insert-if-absent. `is_fresh()` is true only on the call
+        // that actually populated the slot; concurrent callers for the
+        // same (company, experiment, entity) tuple see `false` and bail.
+        // The previous contains_key/insert pair was racy: under load, two
+        // requests could both observe "absent" and both write to DuckDB.
+        //
+        // Insert happens before send-on-the-wire: if the channel is
+        // saturated we still mark the tuple as deduped so a struggling
+        // writer doesn't get a thundering herd of retries. The event is
+        // lost, the `dropped` counter rises, and the next exposure for
+        // the tuple has to wait out the TTL.
+        let entry = self.dedup_cache.entry(key).or_insert_with(|| ());
+        if !entry.is_fresh() {
             self.deduped.fetch_add(1, Ordering::Relaxed);
             return;
         }
-
-        // Insert before send: if the channel is saturated, we still mark
-        // the tuple as deduped to prevent every subsequent request from
-        // re-attempting and amplifying load on a struggling writer. The
-        // event is lost, the `dropped` counter rises, and the user has to
-        // wait out the TTL before another exposure can be recorded.
-        self.dedup_cache.insert(key, ());
 
         if self.tx.try_send(event).is_err() {
             self.dropped.fetch_add(1, Ordering::Relaxed);
@@ -135,7 +140,6 @@ pub struct WriterConfig {
 
 const SCHEMA_SQL: &str = "
 CREATE TABLE IF NOT EXISTS exposures (
-    event_id        VARCHAR NOT NULL,
     schema_version  INTEGER NOT NULL,
     ts_ms           BIGINT  NOT NULL,
     company_id      VARCHAR NOT NULL,
@@ -144,6 +148,18 @@ CREATE TABLE IF NOT EXISTS exposures (
     entity_id       VARCHAR NOT NULL
 );
 ";
+
+/// Open the DuckDB file and ensure the `exposures` table exists.
+///
+/// Run this from `main` before `spawn_writer` so a bad file path or a
+/// schema migration mismatch fails the process at boot rather than silently
+/// landing on the background writer task — where a failure would only show
+/// up as exposures going missing.
+pub fn bootstrap_duckdb_schema(duckdb_path: &Path) -> duckdb::Result<()> {
+    let conn = Connection::open(duckdb_path)?;
+    conn.execute_batch(SCHEMA_SQL)?;
+    Ok(())
+}
 
 pub fn spawn_writer(
     rx: mpsc::Receiver<ExposureEvent>,
@@ -169,13 +185,9 @@ fn run_writer(
             return;
         }
     };
-    // TODO: can we move on the startup?
-    if let Err(e) = conn.execute_batch(SCHEMA_SQL) {
-        log::error!("exposure: failed to bootstrap DuckDB schema: {}", e);
-        drain_until_closed(&mut rx);
-        return;
-    }
 
+    // `memory_limit` is a per-connection PRAGMA, so it has to live here
+    // rather than in `bootstrap_duckdb_schema`.
     if let Err(e) = conn.execute_batch("SET memory_limit='256MB'") {
         log::warn!("exposure: failed to set DuckDB memory_limit: {}", e);
     }
@@ -228,7 +240,6 @@ fn flush_batch(conn: &Connection, buf: &mut Vec<ExposureEvent>) -> duckdb::Resul
     let mut app = conn.appender("exposures")?;
     for ev in buf.iter() {
         app.append_row(params![
-            ev.event_id.to_string(),
             ev.schema_version as i32,
             ev.ts_ms,
             ev.company_id,
@@ -252,11 +263,9 @@ fn drain_until_closed(rx: &mut mpsc::Receiver<ExposureEvent>) {
 mod tests {
     use super::*;
     use crate::models::EXPOSURE_SCHEMA_VERSION;
-    use uuid::Uuid;
 
     fn make_event(company: &str, exp: &str, entity: &str) -> ExposureEvent {
         ExposureEvent {
-            event_id: Uuid::new_v4(),
             schema_version: EXPOSURE_SCHEMA_VERSION,
             ts_ms: 0,
             company_id: company.to_string(),

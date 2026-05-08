@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::errors::CustomError;
 use crate::validation::Validate;
 
-pub type ApiKeyCache = Cache<String, Arc<ApiKeyAuthRow>>;
+/// Cache value is `Option<Arc<...>>` so both hits *and* misses memoize.
+/// Without negative caching, an unauthenticated client can spray random
+/// `X-Api-Key` headers and force one SQLite query per request.
+pub type ApiKeyCache = Cache<String, Option<Arc<ApiKeyAuthRow>>>;
 
 #[derive(Clone, Debug)]
 pub struct AuthenticatedApiKey {

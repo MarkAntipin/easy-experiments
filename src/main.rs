@@ -6,7 +6,7 @@ use env_logger::Env;
 use easy_experiments::config::get_config;
 use easy_experiments::models::{ExperimentsDB, ExposureEvent};
 use easy_experiments::services::exposure::{
-    spawn_writer, DedupConfig, EventSink, MpscEventSink, WriterConfig,
+    bootstrap_duckdb_schema, spawn_writer, DedupConfig, EventSink, MpscEventSink, WriterConfig,
 };
 use easy_experiments::services::google_auth::GoogleTokenVerifier;
 use easy_experiments::startup::run;
@@ -55,10 +55,13 @@ async fn main() -> std::io::Result<()> {
         })
         .unwrap_or_default();
 
+    let duckdb_path = PathBuf::from(&config.duckdb_path);
+    bootstrap_duckdb_schema(&duckdb_path).expect("Failed to bootstrap DuckDB schema");
+
     let (event_tx, event_rx) = mpsc::channel::<ExposureEvent>(config.event_queue_capacity);
     let writer_handle = spawn_writer(
         event_rx,
-        PathBuf::from(&config.duckdb_path),
+        duckdb_path,
         WriterConfig {
             batch_capacity: config.event_batch_capacity,
             flush_interval: Duration::from_millis(config.event_flush_interval_ms),

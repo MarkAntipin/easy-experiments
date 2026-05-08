@@ -18,14 +18,25 @@ use crate::models::{
 /// fail the request than tie up an actix worker indefinitely.
 const EXPERIMENT_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Loader-side error for the moka cache. `Missing` is the "not found" signal
-/// (deliberately not cached so we don't pin negative results — that's a
-/// separate concern). `Failed` carries through real errors so callers see
-/// them once the loader resolves.
-#[derive(Debug)]
-enum ExperimentLoadError {
-    Missing,
-    Failed(CustomError),
+/// Invalidate `(company_id, key)` from the experiment cache *and* schedule
+/// a follow-up invalidation just past the loader timeout.
+///
+/// `try_get_with` doesn't cancel an in-flight loader when its entry is
+/// invalidated. Sequence: (1) `/evaluate` cache miss starts loader, reads
+/// running row from SQLite. (2) admin stops/deletes/updates and invalidates.
+/// (3) loader resolves and re-inserts the now-stale row, which lingers
+/// until TTL. The delayed second invalidate evicts that late insertion;
+/// any loader that hadn't completed by `EXPERIMENT_LOOKUP_TIMEOUT` has
+/// errored out and didn't insert anything.
+async fn invalidate_experiment_cache(db: &ExperimentsDB, company_id: &str, key: &str) {
+    let cache_key = (company_id.to_string(), key.to_string());
+    db.experiment_cache.invalidate(&cache_key).await;
+
+    let cache = db.experiment_cache.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(EXPERIMENT_LOOKUP_TIMEOUT + Duration::from_millis(500)).await;
+        cache.invalidate(&cache_key).await;
+    });
 }
 
 async fn invalidate_experiment_cache_by_id(db: &ExperimentsDB, id: &str, company_id: &str) {
@@ -46,9 +57,7 @@ async fn invalidate_experiment_cache_by_id(db: &ExperimentsDB, id: &str, company
     .flatten();
 
     if let Some(k) = key {
-        db.experiment_cache
-            .invalidate(&(company_id.to_string(), k))
-            .await;
+        invalidate_experiment_cache(db, company_id, &k).await;
     }
 }
 
@@ -106,6 +115,10 @@ pub async fn db_create_experiment(
     if result.rows_affected() == 0 {
         Ok(CreateExperimentOutcome::KeyConflict)
     } else {
+        // Clear any cached `None` entry: if /evaluate was called with this
+        // (company_id, key) before the experiment existed, the negative
+        // cache would shadow the new row until TTL.
+        invalidate_experiment_cache(db, company_id, key).await;
         Ok(CreateExperimentOutcome::Created(experiment_id))
     }
 }
@@ -153,11 +166,14 @@ pub async fn db_get_experiment_by_key(
     let key_for_loader = key.to_string();
     let company_for_loader = company_id.to_string();
 
-    // Single-flight: under a stampede of concurrent misses for the same key,
-    // moka runs the loader exactly once and hands the result to all waiters.
+    // Single-flight + negative caching. Both `Some(experiment)` and `None`
+    // are memoized — without that, an authenticated tenant hammering
+    // /evaluate with unknown experiment_keys would put one SQLite query on
+    // the pool per request. Real errors (timeout, parse failure) bubble up
+    // uncached.
     let result = db
         .experiment_cache
-        .try_get_with::<_, ExperimentLoadError>(cache_key, async move {
+        .try_get_with::<_, CustomError>(cache_key, async move {
             let query = sqlx::query_as(
                 "
                 SELECT
@@ -198,28 +214,18 @@ pub async fn db_get_experiment_by_key(
                     key_for_loader,
                     company_for_loader,
                 );
-                ExperimentLoadError::Failed(CustomError::InternalError(
-                    "experiment lookup timed out".to_string(),
-                ))
+                CustomError::InternalError("experiment lookup timed out".to_string())
             })?
-            .map_err(|e| ExperimentLoadError::Failed(CustomError::from(e)))?;
+            .map_err(CustomError::from)?;
 
             match row {
-                None => Err(ExperimentLoadError::Missing),
-                Some(r) => parse_cached_experiment(r)
-                    .map(Arc::new)
-                    .map_err(ExperimentLoadError::Failed),
+                None => Ok(None),
+                Some(r) => Ok(Some(Arc::new(parse_cached_experiment(r)?))),
             }
         })
         .await;
 
-    match result {
-        Ok(arc) => Ok(Some(arc)),
-        Err(arc_err) => match arc_err.as_ref() {
-            ExperimentLoadError::Missing => Ok(None),
-            ExperimentLoadError::Failed(e) => Err(e.clone()),
-        },
-    }
+    result.map_err(|arc_err| arc_err.as_ref().clone())
 }
 
 fn parse_cached_experiment(row: ExperimentRow) -> Result<CachedExperiment, CustomError> {
@@ -581,9 +587,7 @@ pub async fn db_delete_experiment(
 
     if let Some(key) = updated_key {
         tx.commit().await?;
-        db.experiment_cache
-            .invalidate(&(company_id.to_string(), key))
-            .await;
+        invalidate_experiment_cache(db, company_id, &key).await;
         return Ok(DeleteExperimentOutcome::Deleted);
     }
 

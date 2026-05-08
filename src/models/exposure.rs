@@ -1,12 +1,8 @@
-use uuid::Uuid;
-
 pub const EXPOSURE_SCHEMA_VERSION: u16 = 1;
 
-// TODO: review schema here. Do I need those company_id, event_id, schema_version?
-// TODO: What do I need for plot display 
+// TODO: What do I need for plot display
 #[derive(Debug, Clone)]
 pub struct ExposureEvent {
-    pub event_id: Uuid,
     pub schema_version: u16,
     pub ts_ms: i64,
     pub company_id: String,
@@ -24,7 +20,6 @@ impl ExposureEvent {
         entity_id: String,
     ) -> Self {
         Self {
-            event_id: Uuid::new_v4(),
             schema_version: EXPOSURE_SCHEMA_VERSION,
             ts_ms,
             company_id,

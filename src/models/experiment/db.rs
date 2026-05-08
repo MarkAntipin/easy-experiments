@@ -9,7 +9,10 @@ use super::domain::Segment;
 use super::status::ExperimentStatus;
 
 pub type ExperimentCacheKey = (String, String);
-pub type ExperimentCache = Cache<ExperimentCacheKey, Arc<CachedExperiment>>;
+/// Cache value is `Option<Arc<...>>` so misses are memoized too. Without
+/// negative caching, a tenant hammering `/evaluate` with unknown
+/// experiment_keys would pin the SQLite pool with one query per request.
+pub type ExperimentCache = Cache<ExperimentCacheKey, Option<Arc<CachedExperiment>>>;
 
 /// Parsed, evaluation-ready view of an experiment.
 ///
