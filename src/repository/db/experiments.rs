@@ -171,6 +171,12 @@ pub async fn db_get_experiment_by_key(
     // /evaluate with unknown experiment_keys would put one SQLite query on
     // the pool per request. Real errors (timeout, parse failure) bubble up
     // uncached.
+    //
+    // The `status = 'running'` filter is intentional: only running rows can
+    // produce assignments, so caching draft/stopped/deleted as `None` keeps
+    // the cache from filling up with rows that would always reject. Status
+    // transitions (start/stop/delete) all invalidate the cache, so a draft
+    // promoted to running picks up on the next call.
     let result = db
         .experiment_cache
         .try_get_with::<_, CustomError>(cache_key, async move {
@@ -192,7 +198,7 @@ pub async fn db_get_experiment_by_key(
                 FROM experiments
                 WHERE key = $1
                   AND company_id = $2
-                  AND status != 'deleted'
+                  AND status = 'running'
                 ",
             )
             .bind(&key_for_loader)
@@ -208,11 +214,11 @@ pub async fn db_get_experiment_by_key(
             )
             .await
             .map_err(|_| {
-                log::error!(
-                    "experiment lookup timed out after {:?} for key={} company_id={}",
-                    EXPERIMENT_LOOKUP_TIMEOUT,
-                    key_for_loader,
-                    company_for_loader,
+                tracing::error!(
+                    timeout_ms = EXPERIMENT_LOOKUP_TIMEOUT.as_millis() as u64,
+                    experiment_key = %key_for_loader,
+                    company_id = %company_for_loader,
+                    "experiment lookup timed out",
                 );
                 CustomError::InternalError("experiment lookup timed out".to_string())
             })?
@@ -251,7 +257,6 @@ fn parse_cached_experiment(row: ExperimentRow) -> Result<CachedExperiment, Custo
 
     Ok(CachedExperiment {
         experiment_id: row.experiment_id,
-        status: row.status,
         variant_configs,
         segments,
     })

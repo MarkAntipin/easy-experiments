@@ -16,6 +16,14 @@ pub async fn create_api_key(
     let request = payload.into_inner();
     let created = api_key::create(&db, &user.company_id, request.name).await?;
 
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        api_key_id = %created.api_key_id,
+        key_prefix = %created.prefix,
+        "api key created",
+    );
+
     Ok(HttpResponse::Created().json(CreateApiKeyResponse {
         api_key_id: created.api_key_id,
         name: created.name,

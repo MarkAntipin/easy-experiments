@@ -18,6 +18,13 @@ pub async fn google_login(
     let result =
         auth::google_login(&db, &google_verifier, &jwt_secret.0, &request.token).await?;
 
+    tracing::info!(
+        user_id = %result.user.user_id,
+        company_id = %result.company.company_id,
+        email = %result.user.email,
+        "user logged in via google",
+    );
+
     Ok(HttpResponse::Ok().json(LoginResponse {
         token: result.token,
         user: UserResponse::from(result.user),

@@ -13,5 +13,13 @@ pub async fn revoke_api_key(
 ) -> Result<HttpResponse, CustomError> {
     let id = id.into_inner().to_string();
     api_key::revoke(&db, &id, &user.company_id).await?;
+
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        api_key_id = %id,
+        "api key revoked",
+    );
+
     Ok(HttpResponse::NoContent().finish())
 }

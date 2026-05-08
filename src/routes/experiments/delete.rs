@@ -13,5 +13,13 @@ pub async fn delete_experiment(
 ) -> Result<HttpResponse, CustomError> {
     let id = id.into_inner().to_string();
     experiment::delete_experiment(&db, &id, &user.company_id).await?;
+
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        experiment_id = %id,
+        "experiment deleted",
+    );
+
     Ok(HttpResponse::NoContent().finish())
 }

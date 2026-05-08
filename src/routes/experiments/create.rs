@@ -15,6 +15,13 @@ pub async fn create_experiment(
 ) -> Result<HttpResponse, CustomError> {
     let id = experiment::create_experiment(&db, &user.company_id, payload.into_inner()).await?;
 
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        experiment_id = %id,
+        "experiment created",
+    );
+
     Ok(HttpResponse::Created().json(CreateExperimentResponse {
         experiment_id: id,
     }))

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -169,6 +170,46 @@ pub fn spawn_writer(
     tokio::task::spawn_blocking(move || run_writer(rx, duckdb_path, config))
 }
 
+/// Periodically logs exposure-sink dedup/drop stats. Holds a `Weak` so it
+/// exits naturally once the sink is dropped at shutdown.
+pub fn spawn_sink_stats(sink: &Arc<dyn EventSink>, interval: Duration) {
+    let weak = Arc::downgrade(sink);
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut last_dropped = 0u64;
+        let mut last_deduped = 0u64;
+        loop {
+            ticker.tick().await;
+            let Some(sink) = weak.upgrade() else { return };
+            let dropped = sink.dropped();
+            let deduped = sink.deduped();
+            drop(sink);
+
+            let dropped_delta = dropped.saturating_sub(last_dropped);
+            let deduped_delta = deduped.saturating_sub(last_deduped);
+            last_dropped = dropped;
+            last_deduped = deduped;
+
+            if dropped_delta > 0 {
+                tracing::warn!(
+                    dropped_total = dropped,
+                    dropped_delta,
+                    deduped_total = deduped,
+                    deduped_delta,
+                    "exposure sink dropped events (channel saturated)",
+                );
+            } else if deduped_delta > 0 {
+                tracing::info!(
+                    deduped_total = deduped,
+                    deduped_delta,
+                    "exposure sink stats",
+                );
+            }
+        }
+    });
+}
+
 fn run_writer(
     mut rx: mpsc::Receiver<ExposureEvent>,
     duckdb_path: PathBuf,
@@ -177,9 +218,10 @@ fn run_writer(
     let conn = match Connection::open(&duckdb_path) {
         Ok(c) => c,
         Err(e) => {
-            log::error!(
-                "exposure: failed to open DuckDB at {:?}: {}",
-                duckdb_path, e
+            tracing::error!(
+                path = %duckdb_path.display(),
+                error = %e,
+                "exposure: failed to open DuckDB",
             );
             drain_until_closed(&mut rx);
             return;
@@ -189,7 +231,7 @@ fn run_writer(
     // `memory_limit` is a per-connection PRAGMA, so it has to live here
     // rather than in `bootstrap_duckdb_schema`.
     if let Err(e) = conn.execute_batch("SET memory_limit='256MB'") {
-        log::warn!("exposure: failed to set DuckDB memory_limit: {}", e);
+        tracing::warn!(error = %e, "exposure: failed to set DuckDB memory_limit");
     }
 
     let runtime = tokio::runtime::Handle::current();
@@ -202,9 +244,19 @@ fn run_writer(
             || (!buf.is_empty() && elapsed >= config.flush_interval);
 
         if should_flush {
-            if let Err(e) = flush_batch(&conn, &mut buf) {
-                log::error!("exposure: DuckDB flush failed, dropping {} events: {}", buf.len(), e);
-                buf.clear();
+            let n = buf.len();
+            match flush_batch(&conn, &mut buf) {
+                Ok(()) => {
+                    tracing::debug!(events = n, "exposure: flushed batch");
+                }
+                Err(e) => {
+                    tracing::error!(
+                        events = n,
+                        error = %e,
+                        "exposure: DuckDB flush failed, dropping events",
+                    );
+                    buf.clear();
+                }
             }
             last_flush = Instant::now();
             continue;
@@ -220,14 +272,21 @@ fn run_writer(
         match n {
             Ok(0) => {
                 // All senders dropped. Flush whatever's left and exit.
-                if !buf.is_empty() {
-                    if let Err(e) = flush_batch(&conn, &mut buf) {
-                        log::error!(
-                            "exposure: final DuckDB flush failed, dropping {} events: {}",
-                            buf.len(), e
-                        );
+                let remaining = buf.len();
+                let mut flushed = 0;
+                if remaining > 0 {
+                    match flush_batch(&conn, &mut buf) {
+                        Ok(()) => flushed = remaining,
+                        Err(e) => {
+                            tracing::error!(
+                                events = remaining,
+                                error = %e,
+                                "exposure: final DuckDB flush failed, dropping events",
+                            );
+                        }
                     }
                 }
+                tracing::info!(flushed, "exposure writer exiting");
                 return;
             }
             Ok(_) => { /* events appended to buf */ }

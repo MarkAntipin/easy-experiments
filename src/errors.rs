@@ -16,6 +16,34 @@ pub enum CustomError {
     PreconditionFailedError(String),
 }
 
+impl CustomError {
+    fn kind(&self) -> &'static str {
+        match self {
+            CustomError::SerializeError(_) => "SerializeError",
+            CustomError::ValidationError(_) => "ValidationError",
+            CustomError::InternalError(_) => "InternalError",
+            CustomError::UnauthorizedError(_) => "UnauthorizedError",
+            CustomError::ForbiddenError(_) => "ForbiddenError",
+            CustomError::NotFoundError(_) => "NotFoundError",
+            CustomError::ConflictError(_) => "ConflictError",
+            CustomError::PreconditionFailedError(_) => "PreconditionFailedError",
+        }
+    }
+
+    fn message(&self) -> &str {
+        match self {
+            CustomError::SerializeError(m)
+            | CustomError::ValidationError(m)
+            | CustomError::InternalError(m)
+            | CustomError::UnauthorizedError(m)
+            | CustomError::ForbiddenError(m)
+            | CustomError::NotFoundError(m)
+            | CustomError::ConflictError(m)
+            | CustomError::PreconditionFailedError(m) => m,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ErrorResponse<'a> {
     pub message: &'a str,
@@ -44,25 +72,27 @@ impl ResponseError for CustomError {
 
     fn error_response(&self) -> HttpResponse {
         let status = self.status_code();
+        let message = self.message();
+        let kind = self.kind();
+        let code = status.as_u16();
 
-        match self {
-            CustomError::SerializeError(message)
-            | CustomError::ValidationError(message)
-            | CustomError::InternalError(message)
-            | CustomError::UnauthorizedError(message)
-            | CustomError::ForbiddenError(message)
-            | CustomError::ConflictError(message)
-            | CustomError::PreconditionFailedError(message)
-            | CustomError::NotFoundError(message) => {
-                HttpResponse::build(status).body(ErrorResponse::to_json(message))
-            }
+        // Centralised: 5xx -> error, 400/401/403 -> warn, other 4xx stay quiet.
+        if status.is_server_error() {
+            tracing::error!(status = code, kind, error = %message, "request failed");
+        } else if matches!(
+            status,
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::BAD_REQUEST
+        ) {
+            tracing::warn!(status = code, kind, error = %message, "request rejected");
         }
+
+        HttpResponse::build(status).body(ErrorResponse::to_json(message))
     }
 }
 
 impl From<sqlx::Error> for CustomError {
     fn from(err: sqlx::Error) -> Self {
-        log::error!("sqlx error: {}", err);
+        tracing::error!(error = %err, "sqlx error");
         CustomError::InternalError("Internal Server Error".to_string())
     }
 }

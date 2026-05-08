@@ -35,6 +35,13 @@ pub async fn update_experiment(
     experiment::update_experiment(&db, &id, &user.company_id, payload.into_inner(), if_match)
         .await?;
 
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        experiment_id = %id,
+        "experiment updated",
+    );
+
     Ok(HttpResponse::Ok().json(MessageResponse {
         message: "Experiment updated".to_string(),
     }))
@@ -47,6 +54,14 @@ pub async fn start_experiment(
 ) -> Result<HttpResponse, CustomError> {
     let id = id.into_inner().to_string();
     experiment::start_experiment(&db, &id, &user.company_id).await?;
+
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        experiment_id = %id,
+        "experiment started",
+    );
+
     Ok(HttpResponse::Ok().json(MessageResponse {
         message: "Experiment started".to_string(),
     }))
@@ -59,6 +74,14 @@ pub async fn stop_experiment(
 ) -> Result<HttpResponse, CustomError> {
     let id = id.into_inner().to_string();
     experiment::stop_experiment(&db, &id, &user.company_id).await?;
+
+    tracing::info!(
+        actor_user_id = %user.user_id,
+        company_id = %user.company_id,
+        experiment_id = %id,
+        "experiment stopped",
+    );
+
     Ok(HttpResponse::Ok().json(MessageResponse {
         message: "Experiment stopped".to_string(),
     }))

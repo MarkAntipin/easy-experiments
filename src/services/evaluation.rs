@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::errors::CustomError;
 use crate::models::{
     CachedExperiment, Constraint, ConstraintOperator, Distribution, EvaluateRequest,
-    ExperimentStatus, ExperimentsDB, ExposureEvent,
+    ExperimentsDB, ExposureEvent,
 };
 use crate::repository::db_get_experiment_by_key;
 use crate::services::exposure::EventSink;
@@ -28,9 +28,9 @@ pub async fn evaluate(
     company_id: &str,
     request: EvaluateRequest,
 ) -> Result<EvaluationResult, CustomError> {
-    let experiment = db_get_experiment_by_key(db, &request.experiment_key, company_id)
-        .await?
-        .filter(|exp| exp.status == ExperimentStatus::Running);
+    // The repository only returns Running experiments — non-running rows are
+    // cached as `None`, so any `Some` here is eligible for assignment.
+    let experiment = db_get_experiment_by_key(db, &request.experiment_key, company_id).await?;
 
     let assignment = match experiment.as_deref() {
         Some(exp) => assign_variant(exp, &request.entity_id, &request.properties),
@@ -170,10 +170,10 @@ fn pick_variant(
     // distribution broke that invariant — log loudly and fall back to the last
     // variant rather than silently returning "no assignment", which would
     // un-bucket an eligible user.
-    log::error!(
-        "pick_variant: distributions for experiment {} sum to {} (<100); falling back to last variant",
+    tracing::error!(
         experiment_id,
         cumulative,
+        "pick_variant: distributions sum to <100; falling back to last variant",
     );
     distributions.last().map(|d| d.variant_key.clone())
 }

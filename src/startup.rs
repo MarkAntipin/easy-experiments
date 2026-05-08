@@ -6,10 +6,11 @@ use actix_web::{
     body::MessageBody,
     dev::{Server, ServiceRequest, ServiceResponse},
     error::{JsonPayloadError, PathError},
-    middleware::{from_fn, Next, Logger},
+    middleware::{from_fn, Next},
     web, App, Error, HttpRequest, HttpServer, HttpMessage,
 };
 use actix_cors::Cors;
+use tracing_actix_web::TracingLogger;
 
 /// Body limit for `/evaluate`. The valid request shape is `experiment_key` +
 /// `entity_id` (each ≤256 bytes) + a `properties` JSON object. 32KB leaves
@@ -155,7 +156,7 @@ pub fn run(
 
         App::new()
             .wrap(cors)
-            .wrap(Logger::default())
+            .wrap(TracingLogger::default())
             .service(
                 web::scope("/admin/v1")
                 .app_data(

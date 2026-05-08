@@ -9,21 +9,22 @@ use super::domain::Segment;
 use super::status::ExperimentStatus;
 
 pub type ExperimentCacheKey = (String, String);
-/// Cache value is `Option<Arc<...>>` so misses are memoized too. Without
-/// negative caching, a tenant hammering `/evaluate` with unknown
-/// experiment_keys would pin the SQLite pool with one query per request.
+/// Cache value is `Option<Arc<...>>` so misses are memoized too. The repository
+/// only loads `status = 'running'` rows, so a `None` covers both "doesn't
+/// exist" and "exists but not running" — a tenant hammering `/evaluate` for
+/// unknown or paused keys still costs at most one SQLite query per TTL.
 pub type ExperimentCache = Cache<ExperimentCacheKey, Option<Arc<CachedExperiment>>>;
 
-/// Parsed, evaluation-ready view of an experiment.
+/// Parsed, evaluation-ready view of a running experiment.
 ///
 /// Stored in the cache so the hot path doesn't re-parse the variants/segments
 /// JSON on every evaluate. Segments are pre-sorted by `priority` ascending.
 /// `variant_configs` is keyed for O(1) config lookup by variant key, and the
 /// config is `Arc`-shared so the evaluate path returns it without cloning the
-/// underlying JSON.
+/// underlying JSON. Status is implicit (always `Running`) — non-running rows
+/// are filtered out at load time.
 pub struct CachedExperiment {
     pub experiment_id: String,
-    pub status: ExperimentStatus,
     pub variant_configs: HashMap<String, Arc<Value>>,
     pub segments: Vec<Segment>,
 }
