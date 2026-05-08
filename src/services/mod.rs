@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod api_key;
 pub mod auth;
 pub mod evaluation;
@@ -5,3 +6,4 @@ pub mod experiment;
 pub mod exposure;
 pub mod google_auth;
 pub mod jwt;
+pub mod metric_sink;

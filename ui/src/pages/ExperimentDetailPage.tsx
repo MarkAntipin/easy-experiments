@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Pencil, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import * as ExperimentsAPI from '@/api/experiments';
 import { ApiError } from '@/api/client';
 import { PageBody, PageHeader } from '@/components/PageHeader';
@@ -97,6 +97,14 @@ export function ExperimentDetailPage() {
               <ArrowLeft aria-hidden className="h-5 w-5" />
               Back
             </Link>
+            {exp.status === 'running' || exp.status === 'stopped' ? (
+              <Link to={`/experiments/${exp.experimentId}/results`}>
+                <Button variant="brand">
+                  <BarChart3 aria-hidden className="h-5 w-5" />
+                  Results
+                </Button>
+              </Link>
+            ) : null}
             <Link to={`/experiments/${exp.experimentId}/edit`}>
               <Button variant="secondary">
                 <Pencil aria-hidden className="h-5 w-5" />

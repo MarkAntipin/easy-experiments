@@ -10,3 +10,5 @@ tags
 /db
 /.claude
 *.duckdb.wal
+*.db-shm
+*.db-wal

@@ -148,14 +148,23 @@ CREATE TABLE IF NOT EXISTS exposures (
     variant_key     VARCHAR,
     entity_id       VARCHAR NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS metric_events (
+    schema_version  INTEGER NOT NULL,
+    ts_ms           BIGINT  NOT NULL,
+    company_id      VARCHAR NOT NULL,
+    entity_id       VARCHAR NOT NULL,
+    metric_name     VARCHAR NOT NULL,
+    metric_value    DOUBLE
+);
 ";
 
-/// Open the DuckDB file and ensure the `exposures` table exists.
+/// Open the DuckDB file and ensure the analytics tables exist.
 ///
-/// Run this from `main` before `spawn_writer` so a bad file path or a
+/// Run this from `main` before any writer task spawns so a bad file path or a
 /// schema migration mismatch fails the process at boot rather than silently
-/// landing on the background writer task — where a failure would only show
-/// up as exposures going missing.
+/// landing on a background task — where a failure would only show up as
+/// exposures or metric events going missing.
 pub fn bootstrap_duckdb_schema(duckdb_path: &Path) -> duckdb::Result<()> {
     let conn = Connection::open(duckdb_path)?;
     conn.execute_batch(SCHEMA_SQL)?;

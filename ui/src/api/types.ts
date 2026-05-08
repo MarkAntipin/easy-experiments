@@ -92,6 +92,10 @@ export interface ApiKeySummary {
   createdAt: number;
 }
 
+export interface ApiKeyListResponse {
+  items: ApiKeySummary[];
+}
+
 export interface CreateApiKeyResponse extends ApiKeySummary {
   key: string;
 }
@@ -116,4 +120,56 @@ export interface LoginResponse {
 
 export interface ApiErrorBody {
   message: string;
+}
+
+export type Granularity = 'hour' | 'day';
+
+export interface VariantResult {
+  variantKey: string;
+  isControl: boolean;
+  exposures: number;
+  converters: number;
+  totalConversions: number;
+  totalValue: number;
+  conversionRate: number | null;
+  ci95: [number, number] | null;
+  lift: number | null;
+  pValue: number | null;
+}
+
+export interface SrmShare {
+  variantKey: string;
+  expected: number;
+  actual: number;
+}
+
+export interface SrmResult {
+  chiSquare: number;
+  pValue: number;
+  warning: boolean;
+  expected: SrmShare[];
+}
+
+export interface TimeSeriesBucket {
+  bucketStartMs: number;
+  perVariant: Record<string, number>;
+}
+
+export interface ResultsResponse {
+  experimentId: string;
+  experimentKey: string;
+  metricName: string;
+  windowStartMs: number;
+  windowEndMs: number;
+  granularity: Granularity;
+  variants: VariantResult[];
+  srm: SrmResult | null;
+  timeSeries: TimeSeriesBucket[];
+}
+
+export interface ResultsQueryParams {
+  start?: number;
+  end?: number;
+  granularity?: Granularity;
+  metric?: string;
 }

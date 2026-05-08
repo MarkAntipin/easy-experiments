@@ -12,42 +12,7 @@ import { Field, Input } from '@/components/Input';
 import { PageLoader } from '@/components/Spinner';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { EmptyState } from '@/components/EmptyState';
-import { SegmentedControl } from '@/components/SegmentedControl';
 import { formatRelative, formatTimestamp } from '@/lib/format';
-
-const EVALUATE_PATH = '/api/v1/experiments/evaluate';
-
-function evaluateUrl(): string {
-  const base = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-  return base ? `${base}${EVALUATE_PATH}` : `https://your-api-host${EVALUATE_PATH}`;
-}
-
-function curlSnippet(key: string): string {
-  return `curl -X POST '${evaluateUrl()}' \\
-  -H 'X-Api-Key: ${key}' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-    "experimentKey": "homepage_cta",
-    "entityId": "user-123",
-    "properties": { "country": "US" }
-  }'`;
-}
-
-function jsSnippet(key: string): string {
-  return `const res = await fetch('${evaluateUrl()}', {
-  method: 'POST',
-  headers: {
-    'X-Api-Key': '${key}',
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    experimentKey: 'homepage_cta',
-    entityId: 'user-123',
-    properties: { country: 'US' },
-  }),
-});
-const { variantKey, config } = await res.json();`;
-}
 
 export function ApiKeysPage() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -128,7 +93,7 @@ export function ApiKeysPage() {
           <PageLoader />
         ) : listQuery.isError ? (
           <ErrorAlert error={listQuery.error} title="Failed to load keys" />
-        ) : listQuery.data && listQuery.data.length > 0 ? (
+        ) : listQuery.data && listQuery.data.items.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-base">
@@ -141,7 +106,7 @@ export function ApiKeysPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {listQuery.data.map((k) => (
+                  {listQuery.data.items.map((k) => (
                     <tr key={k.apiKeyId}>
                       <td className="px-5 py-3 font-medium text-slate-900">
                         <div className="flex items-center gap-2">
@@ -186,11 +151,6 @@ export function ApiKeysPage() {
           />
         )}
 
-        {listQuery.data && listQuery.data.length > 0 ? (
-          <div className="mt-6">
-            <UsageSnippets onCopy={copyToClipboard} />
-          </div>
-        ) : null}
       </PageBody>
 
       <Dialog
@@ -259,8 +219,6 @@ export function ApiKeysPage() {
               </Button>
             </div>
 
-            <UsageSnippets apiKey={revealed.key} onCopy={copyToClipboard} />
-
             <div className="flex justify-end">
               <Button onClick={() => setRevealed(null)}>Done</Button>
             </div>
@@ -297,65 +255,3 @@ export function ApiKeysPage() {
   );
 }
 
-function UsageSnippets({
-  apiKey,
-  onCopy,
-}: {
-  apiKey?: string;
-  onCopy: (text: string) => void;
-}) {
-  const [tab, setTab] = useState<'curl' | 'js'>('curl');
-  const placeholder = apiKey ?? 'YOUR_API_KEY';
-  const code = tab === 'curl' ? curlSnippet(placeholder) : jsSnippet(placeholder);
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-        <div>
-          <h3 className="text-base font-semibold text-slate-900">
-            How to use this key
-          </h3>
-          <p className="text-sm text-slate-500">
-            Send the key in the{' '}
-            <code className="rounded bg-slate-100 px-1 font-mono text-xs">
-              X-Api-Key
-            </code>{' '}
-            header on every evaluate call.
-          </p>
-        </div>
-        <SegmentedControl
-          ariaLabel="Code snippet language"
-          size="sm"
-          options={[
-            { value: 'curl', label: 'curl' },
-            { value: 'js', label: 'JavaScript' },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
-      </div>
-      <div className="relative">
-        <pre className="max-h-72 overflow-auto bg-slate-900 px-5 py-4 font-mono text-sm leading-relaxed text-slate-100">
-          {code}
-        </pre>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="absolute right-2 top-2"
-          onClick={() => onCopy(code)}
-        >
-          <Copy aria-hidden className="h-4 w-4" />
-          Copy
-        </Button>
-      </div>
-      <div className="border-t border-slate-200 px-5 py-2.5 text-sm text-slate-500">
-        Replace{' '}
-        <code className="rounded bg-slate-100 px-1 font-mono">homepage_cta</code>{' '}
-        with your experiment key, and{' '}
-        <code className="rounded bg-slate-100 px-1 font-mono">user-123</code>{' '}
-        with a stable per-user identifier so the same user always sees the same
-        variant.
-      </div>
-    </div>
-  );
-}

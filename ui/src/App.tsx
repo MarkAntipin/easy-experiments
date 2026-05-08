@@ -12,7 +12,9 @@ import { ExperimentsListPage } from '@/pages/ExperimentsListPage';
 import { ExperimentCreatePage } from '@/pages/ExperimentCreatePage';
 import { ExperimentDetailPage } from '@/pages/ExperimentDetailPage';
 import { ExperimentEditPage } from '@/pages/ExperimentEditPage';
+import { ExperimentResultsPage } from '@/pages/ExperimentResultsPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { GuidePage } from '@/pages/GuidePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +69,12 @@ export default function App() {
                   path="/experiments/:id/edit"
                   element={<ExperimentEditPage />}
                 />
+                <Route
+                  path="/experiments/:id/results"
+                  element={<ExperimentResultsPage />}
+                />
                 <Route path="/api-keys" element={<ApiKeysPage />} />
+                <Route path="/guide" element={<GuidePage />} />
               </Route>
               <Route path="*" element={<Navigate to="/experiments" replace />} />
             </Routes>

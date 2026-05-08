@@ -20,9 +20,11 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use uuid::Uuid;
 
 use easy_experiments::models::{AuthenticatedUser, ExperimentsDB};
-use easy_experiments::services::exposure::{EventSink, NoopEventSink};
+use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
+use easy_experiments::services::exposure::{bootstrap_duckdb_schema, EventSink, NoopEventSink};
 use easy_experiments::services::google_auth::{GoogleTokenVerifier, DEFAULT_GOOGLE_JWKS_URL};
 use easy_experiments::services::jwt::create_jwt;
+use easy_experiments::services::metric_sink::{MetricSink, NoopMetricSink};
 use easy_experiments::startup::run;
 
 const TEST_JWT_SECRET: &str = "integration-test-jwt-secret";
@@ -210,6 +212,21 @@ async fn spawn_app() -> TestApp {
 
     let db = ExperimentsDB::new(pool.clone());
     let event_sink: Arc<dyn EventSink> = Arc::new(NoopEventSink);
+    let metric_sink: Arc<dyn MetricSink> = Arc::new(NoopMetricSink);
+
+    // Per-test DuckDB file so the read pool has real (empty) tables to query.
+    // Path is unique per test; the file is dropped when the temp dir is.
+    let duckdb_dir = std::env::temp_dir().join(format!("ee-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&duckdb_dir).expect("create duckdb dir");
+    let duckdb_path = duckdb_dir.join("test.duckdb");
+    bootstrap_duckdb_schema(&duckdb_path).expect("bootstrap duckdb schema");
+    let read_pool = Arc::new(DuckDBReadPool::new(duckdb_path, 2));
+    let results_service = Arc::new(ResultsService::new(
+        read_pool,
+        16,
+        std::time::Duration::from_secs(30),
+    ));
+
     let server = run(
         listener,
         db,
@@ -217,6 +234,8 @@ async fn spawn_app() -> TestApp {
         verifier,
         Vec::new(),
         event_sink,
+        metric_sink,
+        results_service,
     )
     .expect("start server");
 

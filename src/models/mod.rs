@@ -1,3 +1,4 @@
+mod analytics;
 mod api_key;
 mod auth;
 mod common;
@@ -5,7 +6,10 @@ mod db;
 mod evaluate;
 mod experiment;
 mod exposure;
+mod metric;
+mod track;
 
+pub use analytics::*;
 pub use api_key::*;
 pub use auth::*;
 pub use common::*;
@@ -13,3 +17,5 @@ pub use db::*;
 pub use evaluate::*;
 pub use experiment::*;
 pub use exposure::*;
+pub use metric::*;
+pub use track::*;

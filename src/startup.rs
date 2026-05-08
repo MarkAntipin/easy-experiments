@@ -18,6 +18,11 @@ use tracing_actix_web::TracingLogger;
 /// so the in-validate "is this too big?" walk can stay out of the hot path.
 const EVALUATE_JSON_BODY_LIMIT: usize = 32 * 1024;
 
+/// Body limit for `/track`. Up to 100 events per request × per-event ceiling
+/// (entity_id 256B + metric_name 256B + idempotency 128B + value/ts overhead).
+/// 256KB leaves headroom for batched SDK flushes.
+const TRACK_JSON_BODY_LIMIT: usize = 256 * 1024;
+
 /// Body limit for admin write endpoints. Sized so a maxed-out
 /// `CreateExperimentRequest` (per the validator caps in `models/request.rs`)
 /// still fits, while keeping per-request RAM bounded on a small VPS.
@@ -33,6 +38,7 @@ use crate::{
         delete_experiment,
         evaluate,
         get_experiment_by_id,
+        get_experiment_results,
         get_experiments,
         google_login,
         health_check,
@@ -40,12 +46,15 @@ use crate::{
         revoke_api_key,
         start_experiment,
         stop_experiment,
+        track,
         update_experiment,
     },
+    services::analytics::ResultsService,
     services::api_key::{hash_api_key, is_plausible_api_key},
     services::exposure::EventSink,
     services::google_auth::GoogleTokenVerifier,
     services::jwt::verify_jwt,
+    services::metric_sink::MetricSink,
 };
 
 fn json_validation_error(err: JsonPayloadError, _req: &HttpRequest) -> Error {
@@ -140,11 +149,15 @@ pub fn run(
     google_verifier: GoogleTokenVerifier,
     cors_allowed_origins: Vec<String>,
     event_sink: Arc<dyn EventSink>,
+    metric_sink: Arc<dyn MetricSink>,
+    results_service: Arc<ResultsService>,
 ) -> Result<Server, std::io::Error> {
     let db = web::Data::new(db);
     let jwt_secret = web::Data::new(JwtSecret(jwt_secret));
     let google_verifier = web::Data::new(google_verifier);
     let event_sink: web::Data<dyn EventSink> = web::Data::from(event_sink);
+    let metric_sink: web::Data<dyn MetricSink> = web::Data::from(metric_sink);
+    let results_service = web::Data::from(results_service);
 
     let server = HttpServer::new(move || {
         let mut cors = Cors::default()
@@ -177,6 +190,7 @@ pub fn run(
                         .route("/{id}", web::delete().to(delete_experiment))
                         .route("/{id}/start", web::post().to(start_experiment))
                         .route("/{id}/stop", web::post().to(stop_experiment))
+                        .route("/{id}/results", web::get().to(get_experiment_results))
                 )
                 .service(
                     web::scope("/api-keys")
@@ -202,12 +216,24 @@ pub fn run(
                         .wrap(from_fn(api_key_auth_middleware))
                         .route("/evaluate", web::post().to(evaluate))
                 )
+                .service(
+                    web::scope("/track")
+                        .app_data(
+                            web::JsonConfig::default()
+                                .limit(TRACK_JSON_BODY_LIMIT)
+                                .error_handler(json_validation_error),
+                        )
+                        .wrap(from_fn(api_key_auth_middleware))
+                        .route("", web::post().to(track))
+                )
             )
             .route("/health", web::get().to(health_check))
             .app_data(db.clone())
             .app_data(jwt_secret.clone())
             .app_data(google_verifier.clone())
             .app_data(event_sink.clone())
+            .app_data(metric_sink.clone())
+            .app_data(results_service.clone())
             .configure(json_error_handler)
     })
     .listen(listener)?
