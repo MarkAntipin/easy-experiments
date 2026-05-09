@@ -1,7 +1,6 @@
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use duckdb::{Config, Connection};
+use duckdb::Connection;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::errors::CustomError;
@@ -10,29 +9,33 @@ use crate::errors::CustomError;
 /// we cap each so a runaway can't OOM the whole process.
 const PER_CONN_MEMORY_LIMIT: &str = "256MB";
 
-/// Bounded pool of read-only DuckDB connections.
+/// Bounded pool of DuckDB connections backed by a single shared `Database`.
 ///
-/// Aggregation queries are served from this pool so they never share state
-/// with the writer connection. Each handout is gated by a semaphore so we
-/// never exceed `max_size` concurrent queries; idle connections live on a
-/// LIFO stack so a hot connection's caches stay warm.
+/// All pooled connections are produced via `Connection::try_clone` from a
+/// template held inside the pool, so they share the same engine, buffer pool,
+/// catalog, and WAL as the writer connections — that's how we get correct
+/// in-process MVCC and read-after-write across handoffs.
 ///
-/// Connections are lazily created — opening DuckDB connections is not free,
-/// but we don't pay for capacity we never use.
+/// Each handout is gated by a semaphore so we never exceed `max_size`
+/// concurrent queries; idle connections live on a LIFO stack so a hot
+/// connection's caches stay warm. Connections are created lazily on first
+/// acquire that finds the idle stack empty.
 pub struct DuckDBReadPool {
     permits: Arc<Semaphore>,
     idle: Arc<Mutex<Vec<Connection>>>,
-    path: PathBuf,
+    template: Arc<Mutex<Connection>>,
     max_size: usize,
 }
 
 impl DuckDBReadPool {
-    pub fn new(path: PathBuf, max_size: usize) -> Self {
+    /// Build a pool that clones from `template`. The template itself stays in
+    /// the pool for future lazy expansion.
+    pub fn new(template: Connection, max_size: usize) -> Self {
         let max_size = max_size.max(1);
         Self {
             permits: Arc::new(Semaphore::new(max_size)),
             idle: Arc::new(Mutex::new(Vec::with_capacity(max_size))),
-            path,
+            template: Arc::new(Mutex::new(template)),
             max_size,
         }
     }
@@ -41,9 +44,9 @@ impl DuckDBReadPool {
         self.max_size
     }
 
-    /// Acquire a connection. Awaits a permit; opens a new connection only if
-    /// no idle one is available. The returned guard returns the connection to
-    /// the pool on drop.
+    /// Acquire a connection. Awaits a permit; clones a new connection off the
+    /// shared `Database` only if no idle one is available. The returned guard
+    /// returns the connection to the pool on drop.
     pub async fn acquire(&self) -> Result<PooledConnection, CustomError> {
         let permit = self
             .permits
@@ -58,7 +61,7 @@ impl DuckDBReadPool {
         };
         let conn = match maybe_conn {
             Some(c) => c,
-            None => open_read_only(&self.path)?,
+            None => clone_from_template(&self.template)?,
         };
 
         Ok(PooledConnection {
@@ -69,14 +72,10 @@ impl DuckDBReadPool {
     }
 }
 
-fn open_read_only(path: &PathBuf) -> Result<Connection, CustomError> {
-    let config = Config::default()
-        .access_mode(duckdb::AccessMode::ReadOnly)
-        .map_err(|e| {
-            CustomError::InternalError(format!("failed to configure DuckDB read pool: {}", e))
-        })?;
-    let conn = Connection::open_with_flags(path, config).map_err(|e| {
-        CustomError::InternalError(format!("failed to open DuckDB read connection: {}", e))
+fn clone_from_template(template: &Mutex<Connection>) -> Result<Connection, CustomError> {
+    let template = template.lock().expect("analytics pool template poisoned");
+    let conn = template.try_clone().map_err(|e| {
+        CustomError::InternalError(format!("failed to clone DuckDB read connection: {}", e))
     })?;
     let pragma = format!("SET memory_limit='{}'", PER_CONN_MEMORY_LIMIT);
     if let Err(e) = conn.execute_batch(&pragma) {

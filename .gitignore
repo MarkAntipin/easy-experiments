@@ -1,4 +1,5 @@
 /target
+/loadtest/loadtest.env
 *.db
 *.db.wal
 *.duckdb

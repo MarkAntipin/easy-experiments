@@ -20,8 +20,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use uuid::Uuid;
 
 use easy_experiments::models::{AuthenticatedUser, ExperimentsDB};
+use easy_experiments::repository::duckdb::open_and_bootstrap;
 use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
-use easy_experiments::services::exposure::{bootstrap_duckdb_schema, EventSink, NoopEventSink};
+use easy_experiments::services::exposure::{EventSink, NoopEventSink};
 use easy_experiments::services::google_auth::{GoogleTokenVerifier, DEFAULT_GOOGLE_JWKS_URL};
 use easy_experiments::services::jwt::create_jwt;
 use easy_experiments::services::metric_sink::{MetricSink, NoopMetricSink};
@@ -219,8 +220,8 @@ async fn spawn_app() -> TestApp {
     let duckdb_dir = std::env::temp_dir().join(format!("ee-test-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&duckdb_dir).expect("create duckdb dir");
     let duckdb_path = duckdb_dir.join("test.duckdb");
-    bootstrap_duckdb_schema(&duckdb_path).expect("bootstrap duckdb schema");
-    let read_pool = Arc::new(DuckDBReadPool::new(duckdb_path, 2));
+    let duckdb_root = open_and_bootstrap(&duckdb_path).expect("bootstrap duckdb schema");
+    let read_pool = Arc::new(DuckDBReadPool::new(duckdb_root, 2));
     let results_service = Arc::new(ResultsService::new(
         read_pool,
         16,

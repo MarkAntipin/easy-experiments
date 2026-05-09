@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use easy_experiments::config::get_config;
 use easy_experiments::models::{ExperimentsDB, ExposureEvent, MetricEvent};
+use easy_experiments::repository::duckdb::open_and_bootstrap;
 use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
 use easy_experiments::services::exposure::{
-    bootstrap_duckdb_schema, spawn_sink_stats, spawn_writer, DedupConfig, EventSink, MpscEventSink,
-    WriterConfig,
+    spawn_sink_stats, spawn_writer, DedupConfig, EventSink, MpscEventSink, WriterConfig,
 };
 use easy_experiments::services::google_auth::GoogleTokenVerifier;
 use easy_experiments::services::metric_sink::{
@@ -118,13 +118,22 @@ async fn main() -> std::io::Result<()> {
     let google_client_id = config.google_client_id.expect("GOOGLE_CLIENT_ID must be set");
     let google_verifier = GoogleTokenVerifier::new(google_client_id, config.google_jwks_url);
 
+    // Single shared DuckDB engine. Each writer/reader gets its own session via
+    // `try_clone()`, so the whole process funnels through one buffer pool, one
+    // catalog, and one file lock.
     let duckdb_path = PathBuf::from(&config.duckdb_path);
-    bootstrap_duckdb_schema(&duckdb_path).expect("Failed to bootstrap DuckDB schema");
+    let duckdb_root = open_and_bootstrap(&duckdb_path).expect("Failed to bootstrap DuckDB schema");
+    let exposure_conn = duckdb_root
+        .try_clone()
+        .expect("failed to clone DuckDB connection for exposure writer");
+    let metric_conn = duckdb_root
+        .try_clone()
+        .expect("failed to clone DuckDB connection for metric writer");
 
     let (event_tx, event_rx) = mpsc::channel::<ExposureEvent>(config.event_queue_capacity);
     let writer_handle = spawn_writer(
         event_rx,
-        duckdb_path.clone(),
+        exposure_conn,
         WriterConfig {
             batch_capacity: config.event_batch_capacity,
             flush_interval: Duration::from_millis(config.event_flush_interval_ms),
@@ -143,7 +152,7 @@ async fn main() -> std::io::Result<()> {
     let (metric_tx, metric_rx) = mpsc::channel::<MetricEvent>(config.metric_queue_capacity);
     let metric_writer_handle = spawn_metric_writer(
         metric_rx,
-        duckdb_path.clone(),
+        metric_conn,
         MetricWriterConfig {
             batch_capacity: config.metric_batch_capacity,
             flush_interval: Duration::from_millis(config.metric_flush_interval_ms),
@@ -158,7 +167,7 @@ async fn main() -> std::io::Result<()> {
     ));
 
     let read_pool = Arc::new(DuckDBReadPool::new(
-        duckdb_path,
+        duckdb_root,
         config.analytics_pool_size,
     ));
     let results_service = Arc::new(ResultsService::new(

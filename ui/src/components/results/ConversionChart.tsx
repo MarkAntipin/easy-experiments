@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { VariantResult } from '@/api/types';
 import { variantColorByKey } from '@/lib/variantColors';
 
@@ -8,6 +8,8 @@ export interface ConversionChartProps {
   variantKeyOrder: readonly string[];
 }
 
+const W_DEFAULT = 1000;
+const W_MIN = 320;
 const ROW_H = 64;
 const BAR_H = 22;
 const LEFT_PAD = 168; // room for the variant label on the left
@@ -46,8 +48,25 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
     return () => cancelAnimationFrame(id);
   }, []);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(W_DEFAULT);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        if (w > 0) setW(Math.max(W_MIN, w));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const axisMax = useMemo(() => pickAxisMax(variants), [variants]);
   const height = TOP_PAD + variants.length * ROW_H + BOTTOM_PAD;
+  const barAreaW = W - LEFT_PAD - RIGHT_PAD;
 
   // X-axis tick positions: 0, 25%, 50%, 75%, 100% of axisMax.
   const ticks = [0, 0.25, 0.5, 0.75, 1.0].map((t) => ({
@@ -67,18 +86,18 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
           might just be noise.
         </p>
       </div>
-      <div className="px-3 pb-2 pt-3">
+      <div ref={containerRef} className="px-3 pb-2 pt-3">
         <svg
-          viewBox={`0 0 1000 ${height}`}
+          viewBox={`0 0 ${W} ${height}`}
           width="100%"
           height={height}
           role="img"
           aria-label="Conversion rate by variant"
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
         >
           {/* Grid + tick labels */}
           {ticks.map((t) => {
-            const x = LEFT_PAD + (1000 - LEFT_PAD - RIGHT_PAD) * t.frac;
+            const x = LEFT_PAD + barAreaW * t.frac;
             return (
               <g key={t.frac}>
                 <line
@@ -110,17 +129,14 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
 
             const rate = v.conversionRate ?? 0;
             const ratePx =
-              LEFT_PAD +
-              (1000 - LEFT_PAD - RIGHT_PAD) * Math.min(1, rate / axisMax);
+              LEFT_PAD + barAreaW * Math.min(1, rate / axisMax);
 
             const ciLow = v.ci95?.[0] ?? rate;
             const ciHigh = v.ci95?.[1] ?? rate;
             const ciLowPx =
-              LEFT_PAD +
-              (1000 - LEFT_PAD - RIGHT_PAD) * Math.min(1, ciLow / axisMax);
+              LEFT_PAD + barAreaW * Math.min(1, ciLow / axisMax);
             const ciHighPx =
-              LEFT_PAD +
-              (1000 - LEFT_PAD - RIGHT_PAD) * Math.min(1, ciHigh / axisMax);
+              LEFT_PAD + barAreaW * Math.min(1, ciHigh / axisMax);
 
             const noData = v.exposures === 0;
 
@@ -151,7 +167,7 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
                 <rect
                   x={LEFT_PAD}
                   y={barCenterY - BAR_H / 2}
-                  width={1000 - LEFT_PAD - RIGHT_PAD}
+                  width={barAreaW}
                   height={BAR_H}
                   rx={4}
                   fill="#f1f5f9"
@@ -214,7 +230,7 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
 
                     {/* Right-side rate label */}
                     <text
-                      x={1000 - RIGHT_PAD + 8}
+                      x={W - RIGHT_PAD + 8}
                       y={barCenterY + 4}
                       className="fill-slate-900"
                       style={{ fontSize: 13, fontWeight: 600 }}

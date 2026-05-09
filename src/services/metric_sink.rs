@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -132,30 +131,17 @@ pub struct MetricWriterConfig {
 
 pub fn spawn_metric_writer(
     rx: mpsc::Receiver<MetricEvent>,
-    duckdb_path: PathBuf,
+    conn: Connection,
     config: MetricWriterConfig,
 ) -> JoinHandle<()> {
-    tokio::task::spawn_blocking(move || run_metric_writer(rx, duckdb_path, config))
+    tokio::task::spawn_blocking(move || run_metric_writer(rx, conn, config))
 }
 
 fn run_metric_writer(
     mut rx: mpsc::Receiver<MetricEvent>,
-    duckdb_path: PathBuf,
+    conn: Connection,
     config: MetricWriterConfig,
 ) {
-    let conn = match Connection::open(&duckdb_path) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(
-                path = %duckdb_path.display(),
-                error = %e,
-                "metric: failed to open DuckDB",
-            );
-            drain_until_closed(&mut rx);
-            return;
-        }
-    };
-
     if let Err(e) = conn.execute_batch("SET memory_limit='256MB'") {
         tracing::warn!(error = %e, "metric: failed to set DuckDB memory_limit");
     }
@@ -227,10 +213,6 @@ fn flush_batch(conn: &Connection, buf: &mut Vec<MetricEvent>) -> duckdb::Result<
     app.flush()?;
     buf.clear();
     Ok(())
-}
-
-fn drain_until_closed(rx: &mut mpsc::Receiver<MetricEvent>) {
-    while rx.blocking_recv().is_some() {}
 }
 
 #[cfg(test)]

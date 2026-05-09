@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM rust:1.95-alpine AS builder
 
 WORKDIR /usr/src/app
@@ -7,20 +9,34 @@ RUN apk add --no-cache \
     musl-dev \
     linux-headers \
     pkgconfig \
-    openssl-dev \
-    sqlite-dev
+    sqlite-dev \
+    cmake
 
 COPY . .
 
-RUN cargo build --release --bin easy-experiments
+# Single static musl binary. `--bin easy-experiments` keeps helper bins like
+# `seed_loadtest` out of the production image; `--locked` honors Cargo.lock so
+# the image is bit-for-bit reproducible from a given commit.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/usr/src/app/target,sharing=locked \
+    cargo build --release --locked --bin easy-experiments && \
+    cp target/release/easy-experiments /usr/local/bin/easy-experiments && \
+    mkdir -p /rootfs/data
 
-FROM alpine:latest
+# ---------- Runtime ----------
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk add --no-cache sqlite
+COPY --from=builder /usr/local/bin/easy-experiments /easy-experiments
+COPY --from=builder --chown=65532:65532 /rootfs/data /data
 
-WORKDIR /app
+ENV APPLICATION_PORT=18200 \
+    DATABASE_URL="sqlite:///data/easy-experiments.db" \
+    DUCKDB_PATH="/data/easy-experiments.duckdb" \
+    LOG_FORMAT=json
 
-COPY --from=builder /usr/src/app/target/release/easy-experiments .
-COPY --from=builder /usr/src/app/migrations /app/migrations
+EXPOSE 18200
 
-CMD ["./easy-experiments"]
+VOLUME ["/data"]
+
+ENTRYPOINT ["/easy-experiments"]

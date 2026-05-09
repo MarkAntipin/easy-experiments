@@ -56,3 +56,4 @@ CREATE TABLE api_keys (
 );
 
 CREATE INDEX idx_api_keys_company ON api_keys(company_id);
+CREATE UNIQUE INDEX idx_api_keys_company_name ON api_keys(company_id, name);

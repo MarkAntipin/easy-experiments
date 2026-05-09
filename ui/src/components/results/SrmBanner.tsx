@@ -1,4 +1,4 @@
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import type { SrmResult } from '@/api/types';
 import { variantColorByKey } from '@/lib/variantColors';
 import { cn } from '@/lib/cn';
@@ -19,23 +19,8 @@ function formatPValue(p: number): string {
 }
 
 export function SrmBanner({ srm, variantKeyOrder }: SrmBannerProps) {
-  if (srm === null) {
+  if (srm === null || !srm.warning) {
     return null;
-  }
-
-  if (!srm.warning) {
-    return (
-      <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-5 py-3 text-emerald-800">
-        <ShieldCheck aria-hidden className="h-5 w-5 shrink-0 text-emerald-600" />
-        <div className="flex-1 text-base">
-          <span className="font-semibold">Traffic distribution looks healthy.</span>{' '}
-          <span className="text-emerald-700">
-            Observed split matches the configured one (χ² = {srm.chiSquare.toFixed(2)},
-            p = {formatPValue(srm.pValue)}).
-          </span>
-        </div>
-      </div>
-    );
   }
 
   return (

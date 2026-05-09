@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Granularity, TimeSeriesBucket } from '@/api/types';
 import { variantColorByKey } from '@/lib/variantColors';
 
@@ -8,7 +8,8 @@ export interface TimeSeriesChartProps {
   granularity: Granularity;
 }
 
-const W = 1000;
+const W_DEFAULT = 1000;
+const W_MIN = 320;
 const H = 260;
 const PAD_L = 56;
 const PAD_R = 16;
@@ -55,6 +56,21 @@ export function TimeSeriesChart({
   granularity,
 }: TimeSeriesChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(W_DEFAULT);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        if (w > 0) setW(Math.max(W_MIN, w));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const series = useMemo(() => {
     if (buckets.length === 0) return [];
@@ -111,14 +127,14 @@ export function TimeSeriesChart({
         </p>
       </div>
 
-      <div className="relative px-3 pb-3 pt-3">
+      <div ref={containerRef} className="relative px-3 pb-3 pt-3">
         <svg
           viewBox={`0 0 ${W} ${H}`}
           width="100%"
           height={H}
           role="img"
           aria-label="Exposures over time per variant"
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
           onMouseMove={(e) => {
             const svg = e.currentTarget;
             const rect = svg.getBoundingClientRect();

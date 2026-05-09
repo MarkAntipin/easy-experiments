@@ -1,4 +1,3 @@
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -139,44 +138,12 @@ pub struct WriterConfig {
     pub flush_interval: Duration,
 }
 
-const SCHEMA_SQL: &str = "
-CREATE TABLE IF NOT EXISTS exposures (
-    schema_version  INTEGER NOT NULL,
-    ts_ms           BIGINT  NOT NULL,
-    company_id      VARCHAR NOT NULL,
-    experiment_id   VARCHAR NOT NULL,
-    variant_key     VARCHAR,
-    entity_id       VARCHAR NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS metric_events (
-    schema_version  INTEGER NOT NULL,
-    ts_ms           BIGINT  NOT NULL,
-    company_id      VARCHAR NOT NULL,
-    entity_id       VARCHAR NOT NULL,
-    metric_name     VARCHAR NOT NULL,
-    metric_value    DOUBLE
-);
-";
-
-/// Open the DuckDB file and ensure the analytics tables exist.
-///
-/// Run this from `main` before any writer task spawns so a bad file path or a
-/// schema migration mismatch fails the process at boot rather than silently
-/// landing on a background task — where a failure would only show up as
-/// exposures or metric events going missing.
-pub fn bootstrap_duckdb_schema(duckdb_path: &Path) -> duckdb::Result<()> {
-    let conn = Connection::open(duckdb_path)?;
-    conn.execute_batch(SCHEMA_SQL)?;
-    Ok(())
-}
-
 pub fn spawn_writer(
     rx: mpsc::Receiver<ExposureEvent>,
-    duckdb_path: PathBuf,
+    conn: Connection,
     config: WriterConfig,
 ) -> JoinHandle<()> {
-    tokio::task::spawn_blocking(move || run_writer(rx, duckdb_path, config))
+    tokio::task::spawn_blocking(move || run_writer(rx, conn, config))
 }
 
 /// Periodically logs exposure-sink dedup/drop stats. Holds a `Weak` so it
@@ -221,24 +188,11 @@ pub fn spawn_sink_stats(sink: &Arc<dyn EventSink>, interval: Duration) {
 
 fn run_writer(
     mut rx: mpsc::Receiver<ExposureEvent>,
-    duckdb_path: PathBuf,
+    conn: Connection,
     config: WriterConfig,
 ) {
-    let conn = match Connection::open(&duckdb_path) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(
-                path = %duckdb_path.display(),
-                error = %e,
-                "exposure: failed to open DuckDB",
-            );
-            drain_until_closed(&mut rx);
-            return;
-        }
-    };
-
     // `memory_limit` is a per-connection PRAGMA, so it has to live here
-    // rather than in `bootstrap_duckdb_schema`.
+    // rather than at bootstrap time.
     if let Err(e) = conn.execute_batch("SET memory_limit='256MB'") {
         tracing::warn!(error = %e, "exposure: failed to set DuckDB memory_limit");
     }
@@ -306,25 +260,40 @@ fn run_writer(
 
 fn flush_batch(conn: &Connection, buf: &mut Vec<ExposureEvent>) -> duckdb::Result<()> {
     let mut app = conn.appender("exposures")?;
-    for ev in buf.iter() {
-        app.append_row(params![
+    for (i, ev) in buf.iter().enumerate() {
+        let res = app.append_row(params![
             ev.schema_version as i32,
             ev.ts_ms,
             ev.company_id,
             ev.experiment_id,
             ev.variant_key,
             ev.entity_id,
-        ])?;
+        ]);
+        if let Err(e) = res {
+            // TMP DEBUG: bind_parameter discards the underlying DuckDB
+            // message; flushing the broken appender routes through
+            // result_from_duckdb_appender → duckdb_appender_error() and
+            // surfaces the real C-side error.
+            let flush_err = app.flush().err();
+            tracing::error!(
+                row_index = i,
+                batch_size = buf.len(),
+                error = %e,
+                flush_error = ?flush_err,
+                schema_version = ev.schema_version,
+                ts_ms = ev.ts_ms,
+                company_id = %ev.company_id,
+                experiment_id = %ev.experiment_id,
+                variant_key = ?ev.variant_key,
+                entity_id = %ev.entity_id,
+                "exposure DEBUG: append_row failed",
+            );
+            return Err(e);
+        }
     }
     app.flush()?;
     buf.clear();
     Ok(())
-}
-
-/// If we can't write to DuckDB at all, keep draining the channel so producers
-/// don't fill it and start dropping. Events are silently discarded.
-fn drain_until_closed(rx: &mut mpsc::Receiver<ExposureEvent>) {
-    while rx.blocking_recv().is_some() {}
 }
 
 #[cfg(test)]
