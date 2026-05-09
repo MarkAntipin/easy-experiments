@@ -7,16 +7,16 @@ use super::created_id;
 use crate::common::{valid_experiment_body, TestApp};
 
 #[tokio::test]
-async fn returns_full_representation() {
-    // Arrange
+async fn get_experiment_existing_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let body = valid_experiment_body("full_repr");
     let id = created_id(&app, &body).await;
 
-    // Act
+    // act
     let response = app.get_experiment(&id).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let payload: Value = response.json().await.unwrap();
     assert_eq!(payload["experimentId"], id);
@@ -28,27 +28,27 @@ async fn returns_full_representation() {
 }
 
 #[tokio::test]
-async fn returns_404_for_unknown_id() {
-    // Arrange
+async fn get_experiment_unknown_id_not_found() {
+    // arrange
     let app = TestApp::spawn().await;
 
-    // Act
+    // act
     let response = app
         .get_experiment("00000000-0000-0000-0000-000000000000")
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
-async fn does_not_leak_across_tenants() {
-    // Arrange: user A creates an experiment, user B tries to read it.
+async fn get_experiment_other_tenant_not_found() {
+    // arrange: user A creates an experiment, user B tries to read it.
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("tenant_a")).await;
     let (_, other_token) = app.seed_other_user().await;
 
-    // Act
+    // act
     let response = app
         .raw_client()
         .get(format!("{}/admin/v1/experiments/{id}", app.addr()))
@@ -57,6 +57,6 @@ async fn does_not_leak_across_tenants() {
         .await
         .unwrap();
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

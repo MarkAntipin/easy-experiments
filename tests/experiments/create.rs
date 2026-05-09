@@ -6,15 +6,15 @@ use serde_json::{json, Value};
 use crate::common::{valid_experiment_body, TestApp};
 
 #[tokio::test]
-async fn returns_201_and_persists() {
-    // Arrange
+async fn create_experiment_valid_payload_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let body = valid_experiment_body("checkout_button_color");
 
-    // Act
+    // act
     let response = app.post_experiment(&body).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::CREATED);
     let payload: Value = response.json().await.unwrap();
     let experiment_id = payload["experimentId"]
@@ -36,37 +36,37 @@ async fn returns_201_and_persists() {
 }
 
 #[tokio::test]
-async fn rejects_invalid_payload_with_422() {
-    // Arrange: distributions don't sum to 100
+async fn create_experiment_invalid_payload_validation_error() {
+    // arrange: distributions don't sum to 100
     let app = TestApp::spawn().await;
     let mut body = valid_experiment_body("bad");
     body["segments"][0]["distributions"][0]["percent"] = json!(10);
 
-    // Act
+    // act
     let response = app.post_experiment(&body).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
-async fn rejects_duplicate_key_with_409() {
-    // Arrange
+async fn create_experiment_duplicate_key_conflict() {
+    // arrange
     let app = TestApp::spawn().await;
     let body = valid_experiment_body("dup_key");
     let first = app.post_experiment(&body).await;
     assert_eq!(first.status(), StatusCode::CREATED);
 
-    // Act
+    // act
     let second = app.post_experiment(&body).await;
 
-    // Assert
+    // assert
     assert_eq!(second.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]
-async fn allows_same_key_across_tenants() {
-    // Arrange: user A creates an experiment with a given key.
+async fn create_experiment_same_key_across_tenants_ok() {
+    // arrange: user A creates an experiment with a given key.
     let app = TestApp::spawn().await;
     let body = valid_experiment_body("shared_key");
     let first = app.post_experiment(&body).await;
@@ -74,7 +74,7 @@ async fn allows_same_key_across_tenants() {
 
     let (other_user, other_token) = app.seed_other_user().await;
 
-    // Act: user B (different company) creates an experiment with the same key.
+    // act: user B (different company) creates an experiment with the same key.
     let second = app
         .raw_client()
         .post(format!("{}/admin/v1/experiments", app.addr()))
@@ -84,7 +84,7 @@ async fn allows_same_key_across_tenants() {
         .await
         .unwrap();
 
-    // Assert: both creations succeed and each row is scoped to its own company.
+    // assert: both creations succeed and each row is scoped to its own company.
     assert_eq!(second.status(), StatusCode::CREATED);
 
     let count: (i64,) =
@@ -107,12 +107,12 @@ async fn allows_same_key_across_tenants() {
 }
 
 #[tokio::test]
-async fn requires_jwt() {
-    // Arrange
+async fn create_experiment_missing_jwt_unauthorized() {
+    // arrange
     let app = TestApp::spawn().await;
     let body = valid_experiment_body("needs_auth");
 
-    // Act: no bearer token
+    // act: no bearer token
     let response = app
         .raw_client()
         .post(format!("{}/admin/v1/experiments", app.addr()))
@@ -121,6 +121,6 @@ async fn requires_jwt() {
         .await
         .unwrap();
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

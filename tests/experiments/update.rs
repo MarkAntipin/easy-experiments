@@ -7,17 +7,17 @@ use super::created_id;
 use crate::common::{valid_experiment_body, TestApp};
 
 #[tokio::test]
-async fn description_succeeds() {
-    // Arrange
+async fn update_experiment_description_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("updatable")).await;
 
-    // Act
+    // act
     let response = app
         .patch_experiment(&id, &json!({ "description": "updated" }), None)
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (Option<String>,) =
         sqlx::query_as("SELECT description FROM experiments WHERE experiment_id = $1")
@@ -29,17 +29,17 @@ async fn description_succeeds() {
 }
 
 #[tokio::test]
-async fn clearing_description_sets_null() {
-    // Arrange
+async fn update_experiment_null_description_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("clearable")).await;
 
-    // Act
+    // act
     let response = app
         .patch_experiment(&id, &json!({ "description": null }), None)
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (Option<String>,) =
         sqlx::query_as("SELECT description FROM experiments WHERE experiment_id = $1")
@@ -51,23 +51,23 @@ async fn clearing_description_sets_null() {
 }
 
 #[tokio::test]
-async fn primary_metric_change_blocked_when_running() {
-    // Arrange
+async fn update_experiment_primary_metric_when_running_conflict() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("running_pm")).await;
     assert_eq!(app.start_experiment(&id).await.status(), StatusCode::OK);
 
-    // Act: try to change primary_metric on a running experiment
+    // act: try to change primary_metric on a running experiment
     let response = app
         .patch_experiment(&id, &json!({ "primaryMetric": "new_metric" }), None)
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]
-async fn variants_change_blocked_when_running() {
+async fn update_experiment_variants_when_running_conflict() {
     let app = TestApp::spawn().await;
     let id = app.running_experiment(&valid_experiment_body("running_v")).await;
 
@@ -88,19 +88,19 @@ async fn variants_change_blocked_when_running() {
 }
 
 #[tokio::test]
-async fn description_change_succeeds_when_running() {
-    // Arrange
+async fn update_experiment_description_when_running_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = app
         .running_experiment(&valid_experiment_body("running_desc"))
         .await;
 
-    // Act
+    // act
     let response = app
         .patch_experiment(&id, &json!({ "description": "updated mid-flight" }), None)
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (Option<String>,) =
         sqlx::query_as("SELECT description FROM experiments WHERE experiment_id = $1")
@@ -112,14 +112,14 @@ async fn description_change_succeeds_when_running() {
 }
 
 #[tokio::test]
-async fn rollout_increase_succeeds_when_running() {
-    // Arrange: an experiment that starts at 25% rollout, then is started.
+async fn update_experiment_rollout_increase_when_running_ok() {
+    // arrange: an experiment that starts at 25% rollout, then is started.
     let app = TestApp::spawn().await;
     let mut body = valid_experiment_body("ramp_up");
     body["segments"][0]["rolloutPercent"] = json!(25);
     let id = app.running_experiment(&body).await;
 
-    // Act: bump rollout from 25 → 75. Same segment, same constraints, same
+    // act: bump rollout from 25 → 75. Same segment, same constraints, same
     // distributions — only rollout_percent changes.
     let response = app
         .patch_experiment(
@@ -141,7 +141,7 @@ async fn rollout_increase_succeeds_when_running() {
         )
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (String,) =
         sqlx::query_as("SELECT segments FROM experiments WHERE experiment_id = $1")
@@ -153,7 +153,7 @@ async fn rollout_increase_succeeds_when_running() {
 }
 
 #[tokio::test]
-async fn rollout_decrease_rejected_when_running() {
+async fn update_experiment_rollout_decrease_when_running_conflict() {
     let app = TestApp::spawn().await;
     let mut body = valid_experiment_body("ramp_down");
     body["segments"][0]["rolloutPercent"] = json!(75);
@@ -183,7 +183,7 @@ async fn rollout_decrease_rejected_when_running() {
 }
 
 #[tokio::test]
-async fn distribution_change_rejected_when_running() {
+async fn update_experiment_distribution_when_running_conflict() {
     let app = TestApp::spawn().await;
     let id = app
         .running_experiment(&valid_experiment_body("dist_change"))
@@ -213,7 +213,7 @@ async fn distribution_change_rejected_when_running() {
 }
 
 #[tokio::test]
-async fn segment_added_rejected_when_running() {
+async fn update_experiment_segment_added_when_running_conflict() {
     let app = TestApp::spawn().await;
     let id = app
         .running_experiment(&valid_experiment_body("seg_add"))
@@ -251,7 +251,7 @@ async fn segment_added_rejected_when_running() {
 }
 
 #[tokio::test]
-async fn segments_change_rejected_when_stopped() {
+async fn update_experiment_segments_when_stopped_conflict() {
     let app = TestApp::spawn().await;
     let id = app
         .running_experiment(&valid_experiment_body("ramp_stopped"))
@@ -304,7 +304,7 @@ async fn segments_change_rejected_when_stopped() {
 }
 
 #[tokio::test]
-async fn description_change_succeeds_when_stopped() {
+async fn update_experiment_description_when_stopped_ok() {
     let app = TestApp::spawn().await;
     let id = app
         .running_experiment(&valid_experiment_body("desc_stopped"))
@@ -319,7 +319,7 @@ async fn description_change_succeeds_when_stopped() {
 }
 
 #[tokio::test]
-async fn unchanged_full_payload_succeeds_when_running() {
+async fn update_experiment_unchanged_payload_when_running_ok() {
     // Repro of the form-resubmit case: the UI sends primaryMetric (and
     // sometimes the full unchanged structure) on a running experiment when
     // only the description is being edited. Should be a 200 since nothing
@@ -344,26 +344,26 @@ async fn unchanged_full_payload_succeeds_when_running() {
 }
 
 #[tokio::test]
-async fn with_stale_if_match_returns_412() {
-    // Arrange
+async fn update_experiment_stale_if_match_precondition_failed() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("if_match")).await;
 
-    // Act
+    // act
     let response = app
         .patch_experiment(&id, &json!({ "description": "x" }), Some(0))
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
 }
 
 #[tokio::test]
-async fn returns_404_for_unknown_id() {
-    // Arrange
+async fn update_experiment_unknown_id_not_found() {
+    // arrange
     let app = TestApp::spawn().await;
 
-    // Act
+    // act
     let response = app
         .patch_experiment(
             "00000000-0000-0000-0000-000000000000",
@@ -372,19 +372,19 @@ async fn returns_404_for_unknown_id() {
         )
         .await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
-async fn with_empty_body_is_422() {
-    // Arrange
+async fn update_experiment_empty_body_validation_error() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("empty_patch")).await;
 
-    // Act
+    // act
     let response = app.patch_experiment(&id, &json!({}), None).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }

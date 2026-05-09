@@ -7,16 +7,16 @@ use super::created_id;
 use crate::common::{valid_experiment_body, TestApp};
 
 #[tokio::test]
-async fn returns_all_for_company() {
-    // Arrange
+async fn list_experiments_no_filter_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     created_id(&app, &valid_experiment_body("exp_a")).await;
     created_id(&app, &valid_experiment_body("exp_b")).await;
 
-    // Act
+    // act
     let response = app.list_experiments(None).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = response.json().await.unwrap();
     let items = body["items"].as_array().expect("items array");
@@ -27,8 +27,8 @@ async fn returns_all_for_company() {
 }
 
 #[tokio::test]
-async fn filters_by_status() {
-    // Arrange: one draft, one running.
+async fn list_experiments_status_filter_ok() {
+    // arrange: one draft, one running.
     let app = TestApp::spawn().await;
     created_id(&app, &valid_experiment_body("stays_draft")).await;
     let running_id = created_id(&app, &valid_experiment_body("will_run")).await;
@@ -37,10 +37,10 @@ async fn filters_by_status() {
         StatusCode::OK
     );
 
-    // Act
+    // act
     let response = app.list_experiments(Some("running")).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = response.json().await.unwrap();
     let items = body["items"].as_array().expect("items array");
@@ -50,13 +50,13 @@ async fn filters_by_status() {
 }
 
 #[tokio::test]
-async fn rejects_deleted_filter_with_422() {
-    // Arrange
+async fn list_experiments_deleted_filter_validation_error() {
+    // arrange
     let app = TestApp::spawn().await;
 
-    // Act
+    // act
     let response = app.list_experiments(Some("deleted")).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }

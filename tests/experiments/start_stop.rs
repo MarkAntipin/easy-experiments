@@ -6,15 +6,15 @@ use super::created_id;
 use crate::common::{valid_experiment_body, TestApp};
 
 #[tokio::test]
-async fn start_transitions_draft_to_running() {
-    // Arrange
+async fn start_experiment_draft_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("to_start")).await;
 
-    // Act
+    // act
     let response = app.start_experiment(&id).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (String, Option<i64>) =
         sqlx::query_as("SELECT status, started_at FROM experiments WHERE experiment_id = $1")
@@ -27,30 +27,30 @@ async fn start_transitions_draft_to_running() {
 }
 
 #[tokio::test]
-async fn start_already_running_returns_409() {
-    // Arrange
+async fn start_experiment_already_running_conflict() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("already_running")).await;
     assert_eq!(app.start_experiment(&id).await.status(), StatusCode::OK);
 
-    // Act
+    // act
     let response = app.start_experiment(&id).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]
-async fn stop_running_transitions_to_stopped() {
-    // Arrange
+async fn stop_experiment_running_ok() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("to_stop")).await;
     assert_eq!(app.start_experiment(&id).await.status(), StatusCode::OK);
 
-    // Act
+    // act
     let response = app.stop_experiment(&id).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::OK);
     let row: (String, Option<i64>) =
         sqlx::query_as("SELECT status, stopped_at FROM experiments WHERE experiment_id = $1")
@@ -63,14 +63,14 @@ async fn stop_running_transitions_to_stopped() {
 }
 
 #[tokio::test]
-async fn stop_draft_returns_409() {
-    // Arrange
+async fn stop_experiment_draft_conflict() {
+    // arrange
     let app = TestApp::spawn().await;
     let id = created_id(&app, &valid_experiment_body("still_draft")).await;
 
-    // Act
+    // act
     let response = app.stop_experiment(&id).await;
 
-    // Assert
+    // assert
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
