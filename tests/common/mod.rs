@@ -133,6 +133,34 @@ impl TestApp {
             .expect("POST /admin/v1/experiments/{id}/stop")
     }
 
+    pub async fn post_api_key(&self, body: &Value) -> reqwest::Response {
+        self.client
+            .post(self.url("/admin/v1/api-keys"))
+            .bearer_auth(&self.token)
+            .json(body)
+            .send()
+            .await
+            .expect("POST /admin/v1/api-keys")
+    }
+
+    pub async fn list_api_keys(&self) -> reqwest::Response {
+        self.client
+            .get(self.url("/admin/v1/api-keys"))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .expect("GET /admin/v1/api-keys")
+    }
+
+    pub async fn delete_api_key(&self, id: &str) -> reqwest::Response {
+        self.client
+            .delete(self.url(&format!("/admin/v1/api-keys/{id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .expect("DELETE /admin/v1/api-keys/{id}")
+    }
+
     /// Provision an API key for the test user via the service layer (bypasses
     /// the admin route to keep the evaluate suite focused on /evaluate).
     /// Returns the plaintext to put in `X-Api-Key`.
@@ -317,6 +345,7 @@ async fn seed_company_and_user(
 
 /// A valid, minimal experiment body. Tweak fields on the returned `Value` to
 /// construct edge cases.
+#[allow(dead_code)] // Not used by every `tests/*.rs` binary that compiles `common`.
 pub fn valid_experiment_body(key: &str) -> Value {
     serde_json::json!({
         "key": key,
