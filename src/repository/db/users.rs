@@ -83,6 +83,7 @@ pub async fn db_update_user_profile(
 pub async fn db_create_user_and_company(
     db: &ExperimentsDB,
     email: &str,
+    company_name: &str,
     name: Option<&str>,
     picture_url: Option<&str>,
     google_sub: &str,
@@ -90,12 +91,6 @@ pub async fn db_create_user_and_company(
     let now = Utc::now().timestamp_millis();
     let company_id = Uuid::new_v4().to_string();
     let user_id = Uuid::new_v4().to_string();
-
-    let company_name = email
-        .split('@')
-        .nth(1)
-        .unwrap_or("Unknown")
-        .to_string();
 
     let mut tx = db.pool.begin().await.map_err(CustomError::from)?;
 
@@ -111,7 +106,7 @@ pub async fn db_create_user_and_company(
         ",
     )
     .bind(&company_id)
-    .bind(&company_name)
+    .bind(company_name)
     .bind(now)
     .bind(now)
     .execute(&mut *tx)
@@ -160,7 +155,7 @@ pub async fn db_create_user_and_company(
 
     let company = CompanyRow {
         company_id,
-        name: company_name,
+        name: company_name.to_string(),
         created_at: now,
         updated_at: now,
     };

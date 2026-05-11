@@ -3,6 +3,7 @@ use crate::models::{AuthenticatedUser, CompanyRow, ExperimentsDB, UserRow};
 use crate::repository::{
     db_create_user_and_company, db_find_user_by_google_sub, db_update_user_profile,
 };
+use crate::services::funny_names::generate_funny_name;
 use crate::services::google_auth::GoogleTokenVerifier;
 use crate::services::jwt::create_jwt;
 
@@ -29,6 +30,7 @@ pub async fn google_login(
             db_create_user_and_company(
                 db,
                 &token_info.email,
+                &generate_funny_name(),
                 token_name,
                 token_picture,
                 &token_info.sub,

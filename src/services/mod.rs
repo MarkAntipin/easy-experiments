@@ -4,6 +4,7 @@ pub mod auth;
 pub mod evaluation;
 pub mod experiment;
 pub mod exposure;
+pub mod funny_names;
 pub mod google_auth;
 pub mod jwt;
 pub mod metric_sink;
