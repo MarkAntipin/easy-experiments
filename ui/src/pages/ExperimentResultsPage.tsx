@@ -16,33 +16,15 @@ import {
   presetToRange,
   type RangePreset,
 } from '@/components/results/DateRangePicker';
-import { HeroKPI } from '@/components/results/HeroKPI';
 import { SrmBanner } from '@/components/results/SrmBanner';
 import { TimeSeriesChart } from '@/components/results/TimeSeriesChart';
 import { VariantStatCard } from '@/components/results/VariantStatCard';
+import { Verdict, selectWinnerKey } from '@/components/results/Verdict';
 
 const GRANULARITY_OPTIONS = [
   { value: 'day' as const, label: 'Day' },
   { value: 'hour' as const, label: 'Hour' },
 ];
-
-/**
- * Pick the "winner" — the non-control variant with the highest conversion
- * rate AND p < 0.05 AND positive lift. Returns the variant key or null.
- */
-function pickWinner(variants: VariantResult[]): string | null {
-  const candidates = variants
-    .filter(
-      (v) =>
-        !v.isControl &&
-        v.exposures > 0 &&
-        v.pValue !== null &&
-        v.pValue < 0.05 &&
-        (v.lift ?? 0) > 0,
-    )
-    .sort((a, b) => (b.conversionRate ?? 0) - (a.conversionRate ?? 0));
-  return candidates[0]?.variantKey ?? null;
-}
 
 export function ExperimentResultsPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -91,7 +73,7 @@ export function ExperimentResultsPage() {
   }, [results, variantKeyOrder]);
 
   const winner = useMemo(
-    () => (results ? pickWinner(results.variants) : null),
+    () => (results ? selectWinnerKey(results) : null),
     [results],
   );
 
@@ -188,7 +170,7 @@ export function ExperimentResultsPage() {
 
           {results ? (
             <>
-              <HeroKPI results={results} />
+              <Verdict results={results} variantKeyOrder={variantKeyOrder} />
               <SrmBanner srm={results.srm} variantKeyOrder={variantKeyOrder} />
 
               {sortedVariants.length === 0 ||
@@ -282,6 +264,11 @@ function FootnoteCard({ results }: { results: ResultsResponse }) {
         <li>
           Significance is a two-sided two-proportion z-test with a pooled
           standard error.
+        </li>
+        <li>
+          P-values are <strong>not corrected</strong> for multiple comparisons.
+          With 3+ variants, the chance of seeing one "significant" arm by random
+          variation alone goes up — interpret narrow wins cautiously.
         </li>
       </ul>
     </div>

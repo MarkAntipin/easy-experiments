@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { SrmResult } from '@/api/types';
 import { variantColorByKey } from '@/lib/variantColors';
 import { cn } from '@/lib/cn';
@@ -19,8 +19,41 @@ function formatPValue(p: number): string {
 }
 
 export function SrmBanner({ srm, variantKeyOrder }: SrmBannerProps) {
-  if (srm === null || !srm.warning) {
+  if (srm === null) {
     return null;
+  }
+
+  if (!srm.warning) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 text-sm">
+        <span className="inline-flex items-center gap-2 font-medium text-emerald-900">
+          <CheckCircle2 aria-hidden className="h-4 w-4 text-emerald-600" />
+          Traffic split healthy
+        </span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {srm.expected.map((s) => {
+            const color = variantColorByKey(variantKeyOrder, s.variantKey);
+            return (
+              <span
+                key={s.variantKey}
+                className="inline-flex items-center gap-1.5 text-slate-600"
+              >
+                <span
+                  aria-hidden
+                  className="inline-block h-2 w-2 rounded-sm"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <span className="font-mono text-xs">{s.variantKey}</span>
+                <span className="tabular-nums">{formatPct(s.actual)}</span>
+              </span>
+            );
+          })}
+        </span>
+        <span className="ml-auto text-xs tabular-nums text-slate-500">
+          χ² = {srm.chiSquare.toFixed(2)}, p = {formatPValue(srm.pValue)}
+        </span>
+      </div>
+    );
   }
 
   return (
