@@ -4,13 +4,17 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { ApiError } from '@/api/client';
+import { Button } from '@/components/Button';
+import { Field, Input } from '@/components/Input';
 import { Logo } from '@/components/Logo';
 
 export function LoginPage() {
-  const { isAuthenticated, loginWithGoogle } = useAuth();
+  const { isAuthenticated, loginWithGoogle, loginWithPassword } = useAuth();
   const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   if (isAuthenticated) {
     const from =
@@ -19,7 +23,26 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  const hasClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  const hasGoogleClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+
+  const submitPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setErr('Email and password are required.');
+      return;
+    }
+    setErr(null);
+    setSubmitting(true);
+    try {
+      await loginWithPassword(email.trim(), password);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
+      setErr(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-50 px-4">
@@ -44,40 +67,63 @@ export function LoginPage() {
           Sign in to continue
         </h2>
 
-        {!hasClientId ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
-            Set <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in{' '}
-            <code className="font-mono">ui/.env</code> to enable sign-in.
-          </div>
-        ) : (
-          <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={async (credential) => {
-                if (!credential.credential) {
-                  setErr('No credential returned from Google.');
-                  return;
-                }
-                setErr(null);
-                setSubmitting(true);
-                try {
-                  await loginWithGoogle(credential.credential);
-                } catch (e) {
-                  const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
-                  setErr(msg);
-                  toast.error(msg);
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-              onError={() => setErr('Google sign-in was cancelled or failed.')}
-              useOneTap={false}
+        <form onSubmit={submitPassword} className="flex flex-col gap-4">
+          <Field label="Email" required>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="you@company.com"
             />
-          </div>
-        )}
+          </Field>
+          <Field label="Password" required>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              placeholder="••••••••"
+            />
+          </Field>
+          <Button type="submit" loading={submitting}>
+            Sign in
+          </Button>
+        </form>
 
-        {submitting ? (
-          <p className="mt-3 text-center text-sm text-ink-500">Exchanging token…</p>
+        {hasGoogleClientId ? (
+          <>
+            <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wider text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
+              or
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={async (credential) => {
+                  if (!credential.credential) {
+                    setErr('No credential returned from Google.');
+                    return;
+                  }
+                  setErr(null);
+                  setSubmitting(true);
+                  try {
+                    await loginWithGoogle(credential.credential);
+                  } catch (e) {
+                    const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
+                    setErr(msg);
+                    toast.error(msg);
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                onError={() => setErr('Google sign-in was cancelled or failed.')}
+                useOneTap={false}
+              />
+            </div>
+          </>
         ) : null}
+
         {err ? <p className="mt-3 text-center text-sm text-red-600">{err}</p> : null}
       </div>
     </div>

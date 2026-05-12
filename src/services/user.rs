@@ -1,24 +1,55 @@
+use chrono::{Duration, Utc};
+
 use crate::errors::CustomError;
 use crate::models::{ExperimentsDB, UserListItem, UserRow};
 use crate::repository::{
     db_create_pending_user, db_delete_user, db_list_company_users, CreatePendingUserOutcome,
+    PendingUserInvite,
 };
+use crate::services::password::generate_invite_token;
 
 pub fn normalize_email(raw: &str) -> String {
     raw.trim().to_lowercase()
 }
 
-/// Pre-create a stub `users` row in `company_id`. The row has `google_sub = NULL`
-/// until the invitee signs in with Google for the first time, at which point
-/// `auth::provision_and_mint` claims the stub by binding the real sub.
+pub struct InviteResult {
+    pub user: UserRow,
+    /// `None` when no invite token was issued (password provider disabled).
+    pub plaintext_token: Option<String>,
+}
+
+/// Pre-create a stub `users` row in `company_id`. When `with_invite_token_ttl`
+/// is `Some(days)`, also generate a one-time invite token that the new user can
+/// trade for a password via `/auth/accept-invite` — the plaintext is returned
+/// once in `InviteResult` and never stored. With `None`, the row is a pure
+/// Google-only stub claimed by the first matching Google sign-in.
 pub async fn invite(
     db: &ExperimentsDB,
     company_id: &str,
     email: &str,
-) -> Result<UserRow, CustomError> {
+    with_invite_token_ttl: Option<u32>,
+) -> Result<InviteResult, CustomError> {
     let normalized = normalize_email(email);
-    match db_create_pending_user(db, company_id, &normalized).await? {
-        CreatePendingUserOutcome::Created(row) => Ok(row),
+
+    let token_and_expiry = with_invite_token_ttl.map(|days| {
+        let generated = generate_invite_token();
+        let expires_at = Utc::now()
+            .checked_add_signed(Duration::days(days as i64))
+            .expect("invite expiry within range")
+            .timestamp_millis();
+        (generated, expires_at)
+    });
+
+    let invite_arg = token_and_expiry.as_ref().map(|(g, exp)| PendingUserInvite {
+        invite_token_hash: &g.hash,
+        invite_token_expires_at: *exp,
+    });
+
+    match db_create_pending_user(db, company_id, &normalized, invite_arg).await? {
+        CreatePendingUserOutcome::Created(row) => Ok(InviteResult {
+            user: row,
+            plaintext_token: token_and_expiry.map(|(g, _)| g.plaintext),
+        }),
         CreatePendingUserOutcome::EmailExists => Err(CustomError::ConflictError(format!(
             "A user with email '{}' already exists",
             normalized

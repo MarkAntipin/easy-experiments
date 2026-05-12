@@ -19,7 +19,8 @@ use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use uuid::Uuid;
 
-use easy_experiments::models::{AuthenticatedUser, ExperimentsDB, UserRole};
+use easy_experiments::config::AuthProviders;
+use easy_experiments::models::{AuthenticatedUser, ExperimentsDB, InviteConfig, UserRole};
 use easy_experiments::repository::duckdb::open_and_bootstrap;
 use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
 use easy_experiments::services::exposure::{EventSink, NoopEventSink};
@@ -272,6 +273,59 @@ impl TestApp {
     pub fn addr(&self) -> &str {
         &self.address
     }
+
+    /// Seed a user inside the current company with a real argon2 password hash.
+    /// Used by the password-auth tests to skip the invite-accept dance when
+    /// they just want to exercise login.
+    pub async fn seed_password_user(
+        &self,
+        email: &str,
+        password: &str,
+        role: UserRole,
+    ) -> String {
+        let user_id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp_millis();
+        let hash =
+            easy_experiments::services::password::hash_password(password).expect("hash password");
+
+        sqlx::query(
+            "INSERT INTO users (
+                user_id, company_id, email, name, picture_url,
+                google_sub, password_hash, invite_token_hash, invite_token_expires_at,
+                role, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, NULL, NULL, NULL, $4, NULL, NULL, $5, $6, $6)",
+        )
+        .bind(&user_id)
+        .bind(&self.user.company_id)
+        .bind(email)
+        .bind(&hash)
+        .bind(role)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .expect("insert password user");
+
+        user_id
+    }
+
+    pub async fn password_login(&self, email: &str, password: &str) -> reqwest::Response {
+        self.client
+            .post(self.url("/admin/v1/auth/login"))
+            .json(&serde_json::json!({ "email": email, "password": password }))
+            .send()
+            .await
+            .expect("POST /admin/v1/auth/login")
+    }
+
+    pub async fn accept_invite(&self, token: &str, password: &str) -> reqwest::Response {
+        self.client
+            .post(self.url("/admin/v1/auth/accept-invite"))
+            .json(&serde_json::json!({ "token": token, "password": password }))
+            .send()
+            .await
+            .expect("POST /admin/v1/auth/accept-invite")
+    }
 }
 
 async fn spawn_app() -> TestApp {
@@ -306,11 +360,22 @@ async fn spawn_app() -> TestApp {
         std::time::Duration::from_secs(30),
     ));
 
+    let providers = AuthProviders {
+        google: true,
+        password: true,
+    };
+    let invite_config = InviteConfig {
+        token_ttl_days: 14,
+        app_base_url: "http://localhost".to_string(),
+    };
+
     let server = run(
         listener,
         db,
         TEST_JWT_SECRET.to_string(),
-        verifier,
+        Some(verifier),
+        providers,
+        invite_config,
         Vec::new(),
         event_sink,
         metric_sink,

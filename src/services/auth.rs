@@ -70,14 +70,26 @@ async fn resolve_user(
     }
 
     match db_find_user_by_email(db, normalized_email).await? {
-        Some((stub, company)) if stub.google_sub.is_none() => {
-            // Claim a pending invite: bind the real google_sub onto the stub.
+        Some((stub, company))
+            if stub.google_sub.is_none() && stub.password_hash.is_none() =>
+        {
+            // Pending invite: nobody has proven identity yet. Bind this Google
+            // sub so the row is claimed by the first Google sign-in.
             db_bind_user_google_sub(db, &stub.user_id, &token_info.sub).await?;
             let claimed = UserRow {
                 google_sub: Some(token_info.sub.clone()),
                 ..stub
             };
             Ok((claimed, company))
+        }
+        Some((stub, _)) if stub.google_sub.is_none() && stub.password_hash.is_some() => {
+            // The account already has a password set. Don't silently link a
+            // Google identity onto a password-only account — that would let
+            // anyone who knows the email "claim" it by signing in with Google.
+            Err(CustomError::ConflictError(
+                "An account with this email already exists. Sign in with email + password."
+                    .into(),
+            ))
         }
         Some(_) => {
             // Email is taken by an already-activated user whose google_sub

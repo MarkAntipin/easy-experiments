@@ -21,6 +21,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isInitialized: boolean;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
+  acceptInvite: (token: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -80,15 +82,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(next);
   }, []);
 
+  const loginWithPassword = useCallback(
+    async (email: string, password: string) => {
+      const res = await AuthAPI.passwordLogin(email, password);
+      const next: Session = { token: res.token, user: res.user, company: res.company };
+      persistSession(next);
+      setSession(next);
+    },
+    [],
+  );
+
+  const acceptInvite = useCallback(async (token: string, password: string) => {
+    const res = await AuthAPI.acceptInvite(token, password);
+    const next: Session = { token: res.token, user: res.user, company: res.company };
+    persistSession(next);
+    setSession(next);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       isAuthenticated: session !== null,
       isInitialized,
       loginWithGoogle,
+      loginWithPassword,
+      acceptInvite,
       logout,
     }),
-    [session, isInitialized, loginWithGoogle, logout],
+    [session, isInitialized, loginWithGoogle, loginWithPassword, acceptInvite, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

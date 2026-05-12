@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client';
 import { AuthProvider } from '@/auth/AuthContext';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { Layout } from '@/components/Layout';
+import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ExperimentsListPage } from '@/pages/ExperimentsListPage';
 import { ExperimentCreatePage } from '@/pages/ExperimentCreatePage';
@@ -45,6 +46,7 @@ export default function App() {
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/accept-invite" element={<AcceptInvitePage />} />
               <Route
                 element={
                   <ProtectedRoute>

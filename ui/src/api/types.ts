@@ -136,6 +136,22 @@ export interface LoginResponse {
   company: AuthCompany;
 }
 
+export interface PasswordLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AcceptInviteRequest {
+  token: string;
+  password: string;
+}
+
+export interface InviteUserResponse extends UserSummary {
+  inviteToken: string | null;
+  inviteUrl: string | null;
+  inviteExpiresAt: number | null;
+}
+
 export interface ApiErrorBody {
   message: string;
 }

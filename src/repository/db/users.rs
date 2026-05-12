@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::errors::CustomError;
 use crate::models::{CompanyRow, ExperimentsDB, UserRole, UserRow};
 
-const USER_COLS: &str = "user_id, company_id, email, name, picture_url, google_sub, role, created_at, updated_at";
+const USER_COLS: &str = "user_id, company_id, email, name, picture_url, google_sub, password_hash, invite_token_hash, invite_token_expires_at, role, created_at, updated_at";
 
 pub async fn db_find_user_by_google_sub(
     db: &ExperimentsDB,
@@ -158,6 +158,9 @@ pub async fn db_create_user_and_company(
         name: name.map(str::to_string),
         picture_url: picture_url.map(str::to_string),
         google_sub: Some(google_sub.to_string()),
+        password_hash: None,
+        invite_token_hash: None,
+        invite_token_expires_at: None,
         role: UserRole::Admin,
         created_at: now,
         updated_at: now,
@@ -178,10 +181,16 @@ pub enum CreatePendingUserOutcome {
     EmailExists,
 }
 
+pub struct PendingUserInvite<'a> {
+    pub invite_token_hash: &'a str,
+    pub invite_token_expires_at: i64,
+}
+
 pub async fn db_create_pending_user(
     db: &ExperimentsDB,
     company_id: &str,
     email: &str,
+    invite: Option<PendingUserInvite<'_>>,
 ) -> Result<CreatePendingUserOutcome, CustomError> {
     let user_id = Uuid::new_v4().to_string();
     let now = Utc::now().timestamp_millis();
@@ -195,16 +204,21 @@ pub async fn db_create_pending_user(
             name,
             picture_url,
             google_sub,
+            password_hash,
+            invite_token_hash,
+            invite_token_expires_at,
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, NULL, NULL, NULL, $4, $4)
+        VALUES ($1, $2, $3, NULL, NULL, NULL, NULL, $4, $5, $6, $6)
         ON CONFLICT (email) DO NOTHING
         ",
     )
     .bind(&user_id)
     .bind(company_id)
     .bind(email)
+    .bind(invite.as_ref().map(|i| i.invite_token_hash))
+    .bind(invite.as_ref().map(|i| i.invite_token_expires_at))
     .bind(now)
     .execute(&db.pool)
     .await
@@ -221,10 +235,130 @@ pub async fn db_create_pending_user(
         name: None,
         picture_url: None,
         google_sub: None,
+        password_hash: None,
+        invite_token_hash: invite.as_ref().map(|i| i.invite_token_hash.to_string()),
+        invite_token_expires_at: invite.as_ref().map(|i| i.invite_token_expires_at),
         role: UserRole::Member,
         created_at: now,
         updated_at: now,
     }))
+}
+
+
+pub async fn db_find_user_by_invite_token_hash(
+    db: &ExperimentsDB,
+    token_hash: &str,
+) -> Result<Option<UserRow>, CustomError> {
+    sqlx::query_as(&format!(
+        "SELECT {USER_COLS} FROM users WHERE invite_token_hash = $1"
+    ))
+    .bind(token_hash)
+    .fetch_optional(&db.pool)
+    .await
+    .map_err(CustomError::from)
+}
+
+pub async fn db_set_password_and_clear_invite(
+    db: &ExperimentsDB,
+    user_id: &str,
+    password_hash: &str,
+) -> Result<(), CustomError> {
+    let now = Utc::now().timestamp_millis();
+    sqlx::query(
+        "
+        UPDATE users
+        SET password_hash = $1,
+            invite_token_hash = NULL,
+            invite_token_expires_at = NULL,
+            updated_at = $2
+        WHERE user_id = $3
+        ",
+    )
+    .bind(password_hash)
+    .bind(now)
+    .bind(user_id)
+    .execute(&db.pool)
+    .await
+    .map_err(CustomError::from)?;
+    Ok(())
+}
+
+pub async fn db_count_users(db: &ExperimentsDB) -> Result<i64, CustomError> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+        .fetch_one(&db.pool)
+        .await
+        .map_err(CustomError::from)?;
+    Ok(row.0)
+}
+
+pub async fn db_create_password_admin_and_company(
+    db: &ExperimentsDB,
+    email: &str,
+    company_name: &str,
+    password_hash: &str,
+) -> Result<(UserRow, CompanyRow), CustomError> {
+    let now = Utc::now().timestamp_millis();
+    let company_id = Uuid::new_v4().to_string();
+    let user_id = Uuid::new_v4().to_string();
+
+    let mut tx = db.pool.begin().await.map_err(CustomError::from)?;
+
+    sqlx::query(
+        "INSERT INTO companies (company_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(&company_id)
+    .bind(company_name)
+    .bind(now)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(CustomError::from)?;
+
+    sqlx::query(
+        "
+        INSERT INTO users (
+            user_id, company_id, email, name, picture_url,
+            google_sub, password_hash,
+            invite_token_hash, invite_token_expires_at,
+            role, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, NULL, NULL, NULL, $4, NULL, NULL, $5, $6, $6)
+        ",
+    )
+    .bind(&user_id)
+    .bind(&company_id)
+    .bind(email)
+    .bind(password_hash)
+    .bind(UserRole::Admin)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(CustomError::from)?;
+
+    tx.commit().await.map_err(CustomError::from)?;
+
+    Ok((
+        UserRow {
+            user_id,
+            company_id: company_id.clone(),
+            email: email.to_string(),
+            name: None,
+            picture_url: None,
+            google_sub: None,
+            password_hash: Some(password_hash.to_string()),
+            invite_token_hash: None,
+            invite_token_expires_at: None,
+            role: UserRole::Admin,
+            created_at: now,
+            updated_at: now,
+        },
+        CompanyRow {
+            company_id,
+            name: company_name.to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    ))
 }
 
 pub async fn db_bind_user_google_sub(

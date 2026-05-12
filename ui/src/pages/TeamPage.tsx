@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Copy, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as UsersAPI from '@/api/users';
 import { ApiError } from '@/api/client';
-import type { UserSummary } from '@/api/types';
+import type { InviteUserResponse, UserSummary } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
 import { PageBody, PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -24,6 +24,7 @@ export function TeamPage() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<UserSummary | null>(null);
+  const [inviteShare, setInviteShare] = useState<InviteUserResponse | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -38,7 +39,13 @@ export function TeamPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setInviteOpen(false);
       setEmail('');
-      toast.success(`Invited ${invited.email}. Ask them to sign in with Google.`);
+      if (invited.inviteToken) {
+        // Password flow: surface the one-time link so the admin can hand it
+        // off out-of-band. Token never appears in the list view afterwards.
+        setInviteShare(invited);
+      } else {
+        toast.success(`Invited ${invited.email}. Ask them to sign in with Google.`);
+      }
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : 'Failed to invite');
@@ -79,7 +86,7 @@ export function TeamPage() {
         title="Team"
         description={
           isAdmin
-            ? 'Invite teammates by email. They’ll join when they sign in with Google.'
+            ? 'Invite teammates by email. They join when they accept the invite link or sign in with Google.'
             : 'Your teammates. Only admins can invite or remove members.'
         }
         actions={
@@ -224,7 +231,7 @@ export function TeamPage() {
           setEmailError(null);
         }}
         title="Invite member"
-        description="They join your workspace the next time they sign in with Google using this email."
+        description="They join your workspace once they set their password or sign in with Google."
       >
         <form
           onSubmit={(e) => {
@@ -257,6 +264,11 @@ export function TeamPage() {
         </form>
       </Dialog>
 
+      <InviteShareDialog
+        invite={inviteShare}
+        onClose={() => setInviteShare(null)}
+      />
+
       <Dialog
         open={confirmRemove !== null}
         onClose={() => setConfirmRemove(null)}
@@ -283,5 +295,71 @@ export function TeamPage() {
         </div>
       </Dialog>
     </>
+  );
+}
+
+function InviteShareDialog({
+  invite,
+  onClose,
+}: {
+  invite: InviteUserResponse | null;
+  onClose: () => void;
+}) {
+  const link =
+    invite?.inviteUrl ??
+    (invite?.inviteToken
+      ? `${window.location.origin}/accept-invite?token=${encodeURIComponent(invite.inviteToken)}`
+      : null);
+
+  const expiresLabel = invite?.inviteExpiresAt
+    ? new Date(invite.inviteExpiresAt).toLocaleString()
+    : null;
+
+  return (
+    <Dialog
+      open={invite !== null}
+      onClose={onClose}
+      title="Share this invite link"
+      description={
+        invite
+          ? `Send this one-time link to ${invite.email} however you like (Slack, email, etc.). It will not be shown again.`
+          : ''
+      }
+    >
+      {link ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-stretch gap-2">
+            <input
+              readOnly
+              value={link}
+              className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-900"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(link);
+                  toast.success('Link copied');
+                } catch {
+                  toast.error('Could not copy — select the text manually.');
+                }
+              }}
+            >
+              <Copy aria-hidden className="h-4 w-4" />
+              Copy
+            </Button>
+          </div>
+          {expiresLabel ? (
+            <p className="text-sm text-slate-500">
+              Expires {expiresLabel}. If they miss the window, remove them from the team and invite again.
+            </p>
+          ) : null}
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Done</Button>
+          </div>
+        </div>
+      ) : null}
+    </Dialog>
   );
 }

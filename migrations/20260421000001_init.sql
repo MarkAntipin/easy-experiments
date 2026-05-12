@@ -11,9 +11,15 @@ CREATE TABLE users (
     email           TEXT NOT NULL UNIQUE,
     name            TEXT,
     picture_url     TEXT,
-    -- Nullable: a row with google_sub = NULL is a pending invite that gets
-    -- claimed (sub filled in) when the invitee first signs in with Google.
+    -- Identity proofs. At least one of `google_sub` or `password_hash` is
+    -- set for an *active* user. A row with both NULL is a pending invite
+    -- waiting to be claimed by either Google sign-in or `accept-invite`.
     google_sub      TEXT UNIQUE,
+    password_hash   TEXT,
+    -- Pending password invites carry a hashed one-time token + expiry. The
+    -- plaintext is returned to the inviting admin once and never stored.
+    invite_token_hash       TEXT UNIQUE,
+    invite_token_expires_at INTEGER,
     role            TEXT NOT NULL DEFAULT 'member'
         CHECK(role IN ('admin','member')),
     created_at      INTEGER NOT NULL,
@@ -22,6 +28,7 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_company ON users(company_id);
 CREATE INDEX idx_users_google_sub ON users(google_sub);
+CREATE INDEX idx_users_invite_token_hash ON users(invite_token_hash);
 
 CREATE TABLE experiments (
     experiment_id    TEXT PRIMARY KEY,

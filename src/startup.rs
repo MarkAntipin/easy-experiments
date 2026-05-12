@@ -29,10 +29,12 @@ const TRACK_JSON_BODY_LIMIT: usize = 256 * 1024;
 const ADMIN_JSON_BODY_LIMIT: usize = 256 * 1024;
 
 use crate::{
+    config::AuthProviders,
     errors::CustomError,
-    models::{ExperimentsDB, JwtSecret},
+    models::{ExperimentsDB, InviteConfig, JwtSecret},
     repository::{db_fetch_user_role, db_find_api_key_by_hash},
     routes::{
+        accept_invite,
         create_api_key,
         create_experiment,
         delete_experiment,
@@ -45,12 +47,14 @@ use crate::{
         invite_user,
         list_api_keys,
         list_users,
+        password_login,
         remove_user,
         revoke_api_key,
         start_experiment,
         stop_experiment,
         track,
         update_experiment,
+        PasswordAuthEnabled,
     },
     services::analytics::ResultsService,
     services::api_key::{hash_api_key, is_plausible_api_key},
@@ -167,15 +171,25 @@ pub fn run(
     listener: TcpListener,
     db: ExperimentsDB,
     jwt_secret: String,
-    google_verifier: GoogleTokenVerifier,
+    google_verifier: Option<GoogleTokenVerifier>,
+    auth_providers: AuthProviders,
+    invite_config: InviteConfig,
     cors_allowed_origins: Vec<String>,
     event_sink: Arc<dyn EventSink>,
     metric_sink: Arc<dyn MetricSink>,
     results_service: Arc<ResultsService>,
 ) -> Result<Server, std::io::Error> {
+    // Defensive: callers derive the mode from config; this guards against
+    // accidentally passing an empty `AuthProviders` from some new caller.
+    if !auth_providers.google && !auth_providers.password {
+        panic!("at least one auth provider must be enabled — nobody could sign in otherwise");
+    }
+
     let db = web::Data::new(db);
     let jwt_secret = web::Data::new(JwtSecret(jwt_secret));
-    let google_verifier = web::Data::new(google_verifier);
+    let google_verifier = google_verifier.map(web::Data::new);
+    let invite_config = web::Data::new(invite_config);
+    let password_enabled = web::Data::new(PasswordAuthEnabled(auth_providers.password));
     let event_sink: web::Data<dyn EventSink> = web::Data::from(event_sink);
     let metric_sink: web::Data<dyn MetricSink> = web::Data::from(metric_sink);
     let results_service = web::Data::from(results_service);
@@ -188,7 +202,20 @@ pub fn run(
             cors = cors.allowed_origin(origin);
         }
 
-        App::new()
+        let auth_scope = {
+            let mut scope = web::scope("/auth");
+            if auth_providers.google {
+                scope = scope.route("/google", web::post().to(google_login));
+            }
+            if auth_providers.password {
+                scope = scope
+                    .route("/login", web::post().to(password_login))
+                    .route("/accept-invite", web::post().to(accept_invite));
+            }
+            scope
+        };
+
+        let app = App::new()
             .wrap(cors)
             .wrap(TracingLogger::default())
             .service(
@@ -227,10 +254,7 @@ pub fn run(
                         .route("", web::get().to(list_users))
                         .route("/{id}", web::delete().to(remove_user))
                 )
-                .service(
-                    web::scope("/auth")
-                        .route("/google", web::post().to(google_login))
-                )
+                .service(auth_scope)
             )
             .service(
                 web::scope("/api/v1")
@@ -258,11 +282,17 @@ pub fn run(
             .route("/health", web::get().to(health_check))
             .app_data(db.clone())
             .app_data(jwt_secret.clone())
-            .app_data(google_verifier.clone())
+            .app_data(invite_config.clone())
+            .app_data(password_enabled.clone())
             .app_data(event_sink.clone())
             .app_data(metric_sink.clone())
             .app_data(results_service.clone())
-            .configure(json_error_handler)
+            .configure(json_error_handler);
+
+        match google_verifier.clone() {
+            Some(v) => app.app_data(v),
+            None => app,
+        }
     })
     .listen(listener)?
     .run();

@@ -63,7 +63,7 @@ pub struct UserListItem {
 
 impl From<UserRow> for UserListItem {
     fn from(row: UserRow) -> Self {
-        let status = if row.google_sub.is_some() {
+        let status = if row.google_sub.is_some() || row.password_hash.is_some() {
             UserStatus::Active
         } else {
             UserStatus::Pending
@@ -83,4 +83,19 @@ impl From<UserRow> for UserListItem {
 #[derive(Serialize)]
 pub struct UserListResponse {
     pub items: Vec<UserListItem>,
+}
+
+/// Returned after a successful `POST /admin/v1/users`. The `inviteToken` is the
+/// plaintext one-time token (only emitted at creation; the DB stores its hash).
+/// `inviteUrl` is a convenience: a fully-formed accept-invite link the admin
+/// can copy into Slack/email, when the server knows the UI's base URL. Both
+/// fields are absent when the password provider is disabled.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteUserResponse {
+    #[serde(flatten)]
+    pub user: UserListItem,
+    pub invite_token: Option<String>,
+    pub invite_url: Option<String>,
+    pub invite_expires_at: Option<i64>,
 }

@@ -8,4 +8,6 @@ pub mod funny_names;
 pub mod google_auth;
 pub mod jwt;
 pub mod metric_sink;
+pub mod password;
+pub mod password_auth;
 pub mod user;

@@ -36,6 +36,7 @@ base64 = "0.22"
 moka = { version = "0.12", features = ["future", "sync"] }
 statrs = "0.18"
 num_cpus = "1.16"
+argon2 = "0.5"
 
 [dev-dependencies]
 rsa = "0.9"

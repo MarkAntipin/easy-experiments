@@ -25,6 +25,14 @@ pub struct AuthenticatedUser {
 #[derive(Clone)]
 pub struct JwtSecret(pub String);
 
+/// Tuning knobs for the invite flow, injected as app data so admin routes can
+/// read them without depending on the full `Config`.
+#[derive(Clone)]
+pub struct InviteConfig {
+    pub token_ttl_days: u32,
+    pub app_base_url: String,
+}
+
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 pub struct CompanyRow {
     pub company_id: String,
@@ -41,6 +49,9 @@ pub struct UserRow {
     pub name: Option<String>,
     pub picture_url: Option<String>,
     pub google_sub: Option<String>,
+    pub password_hash: Option<String>,
+    pub invite_token_hash: Option<String>,
+    pub invite_token_expires_at: Option<i64>,
     pub role: UserRole,
     pub created_at: i64,
     pub updated_at: i64,
@@ -49,6 +60,18 @@ pub struct UserRow {
 #[derive(Serialize, Deserialize)]
 pub struct GoogleLoginRequest {
     pub token: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PasswordLoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AcceptInviteRequest {
+    pub token: String,
+    pub password: String,
 }
 
 #[derive(Serialize)]

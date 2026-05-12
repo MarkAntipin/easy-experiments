@@ -4,8 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use easy_experiments::config::get_config;
-use easy_experiments::models::{ExperimentsDB, ExposureEvent, MetricEvent};
+use easy_experiments::models::{ExperimentsDB, ExposureEvent, InviteConfig, MetricEvent};
 use easy_experiments::repository::duckdb::open_and_bootstrap;
+use easy_experiments::repository::{db_count_users, db_create_password_admin_and_company};
 use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
 use easy_experiments::services::exposure::{
     spawn_sink_stats, spawn_writer, DedupConfig, EventSink, MpscEventSink, WriterConfig,
@@ -14,6 +15,7 @@ use easy_experiments::services::google_auth::GoogleTokenVerifier;
 use easy_experiments::services::metric_sink::{
     spawn_metric_writer, MetricDedupConfig, MetricSink, MetricWriterConfig, MpscMetricSink,
 };
+use easy_experiments::services::password::hash_password;
 use easy_experiments::startup::run;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
@@ -47,6 +49,53 @@ fn init_tracing() {
             .with(env_filter)
             .with(fmt::layer().with_target(true))
             .init();
+    }
+}
+
+async fn bootstrap_admin_if_empty(
+    db: &ExperimentsDB,
+    admin_email: Option<&str>,
+    admin_password: Option<&str>,
+    company_name: &str,
+) {
+    let (Some(email), Some(password)) = (admin_email, admin_password) else {
+        return;
+    };
+    let email = email.trim();
+    if email.is_empty() || password.is_empty() {
+        return;
+    }
+    match db_count_users(db).await {
+        Ok(0) => {}
+        Ok(_) => {
+            tracing::info!("users table is non-empty — skipping ADMIN_EMAIL bootstrap");
+            return;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to count users — skipping admin bootstrap");
+            return;
+        }
+    }
+    let normalized = email.to_lowercase();
+    let hash = match hash_password(password) {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to hash bootstrap admin password");
+            return;
+        }
+    };
+    match db_create_password_admin_and_company(db, &normalized, company_name, &hash).await {
+        Ok((user, company)) => {
+            tracing::info!(
+                user_id = %user.user_id,
+                company_id = %company.company_id,
+                email = %user.email,
+                "bootstrap admin seeded from ADMIN_EMAIL/ADMIN_PASSWORD",
+            );
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to seed bootstrap admin");
+        }
     }
 }
 
@@ -114,9 +163,47 @@ async fn main() -> std::io::Result<()> {
     let address = format!("0.0.0.0:{}", config.application_port);
     let listener = TcpListener::bind(address)?;
 
-    let jwt_secret = config.jwt_secret.expect("JWT_SECRET must be set");
-    let google_client_id = config.google_client_id.expect("GOOGLE_CLIENT_ID must be set");
-    let google_verifier = GoogleTokenVerifier::new(google_client_id, config.google_jwks_url);
+    let jwt_secret = config
+        .jwt_secret
+        .clone()
+        .expect("JWT_SECRET must be set");
+    // Auth mode is inferred from configuration:
+    //   GOOGLE_CLIENT_ID set     → Google sign-in (hosted SaaS shape)
+    //   GOOGLE_CLIENT_ID unset   → email + password (OSS / self-hosted shape)
+    let providers = config.auth_provider_set();
+    tracing::info!(
+        google = providers.google,
+        password = providers.password,
+        "auth mode",
+    );
+
+    let google_verifier = if providers.google {
+        let google_client_id = config
+            .google_client_id
+            .clone()
+            .expect("GOOGLE_CLIENT_ID required when google auth mode is active");
+        Some(GoogleTokenVerifier::new(
+            google_client_id,
+            config.google_jwks_url.clone(),
+        ))
+    } else {
+        None
+    };
+
+    if providers.password {
+        bootstrap_admin_if_empty(
+            &experiments_db,
+            config.admin_email.as_deref(),
+            config.admin_password.as_deref(),
+            &config.admin_company_name,
+        )
+        .await;
+    }
+
+    let invite_config = InviteConfig {
+        token_ttl_days: config.invite_token_ttl_days,
+        app_base_url: config.app_base_url.clone(),
+    };
 
     // Single shared DuckDB engine. Each writer/reader gets its own session via
     // `try_clone()`, so the whole process funnels through one buffer pool, one
@@ -181,6 +268,8 @@ async fn main() -> std::io::Result<()> {
         experiments_db,
         jwt_secret,
         google_verifier,
+        providers,
+        invite_config,
         cors_allowed_origins,
         event_sink,
         metric_sink,

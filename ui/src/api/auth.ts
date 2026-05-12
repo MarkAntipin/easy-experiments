@@ -8,3 +8,25 @@ export function googleLogin(idToken: string): Promise<LoginResponse> {
     unauthenticated: true,
   });
 }
+
+export function passwordLogin(
+  email: string,
+  password: string,
+): Promise<LoginResponse> {
+  return request<LoginResponse>('/admin/v1/auth/login', {
+    method: 'POST',
+    body: { email, password },
+    unauthenticated: true,
+  });
+}
+
+export function acceptInvite(
+  token: string,
+  password: string,
+): Promise<LoginResponse> {
+  return request<LoginResponse>('/admin/v1/auth/accept-invite', {
+    method: 'POST',
+    body: { token, password },
+    unauthenticated: true,
+  });
+}

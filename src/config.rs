@@ -13,6 +13,24 @@ pub struct Config {
 
     pub google_jwks_url: String,
 
+    /// Optional bootstrap admin. When set and the `users` table is empty on
+    /// startup, a fresh company + admin user is seeded with this email/password
+    /// so a brand-new self-hosted instance has someone who can sign in.
+    pub admin_email: Option<String>,
+    pub admin_password: Option<String>,
+    pub admin_company_name: String,
+
+    /// How long an accept-invite token stays valid. 14 days is the default —
+    /// long enough to accommodate "I missed the link" without leaving stale
+    /// tokens around for months.
+    pub invite_token_ttl_days: u32,
+
+    /// Public base URL where the UI lives. Used to render the `acceptInviteUrl`
+    /// that the inviting admin copies to the new teammate. Defaults to empty,
+    /// in which case only the bare `token` is returned and the UI builds the
+    /// URL from its own origin.
+    pub app_base_url: String,
+
     pub sqlite_url: String,
 
     pub duckdb_path: String,
@@ -54,6 +72,38 @@ impl Config {
             .unwrap_or(&self.sqlite_url);
         PathBuf::from(path)
     }
+
+    /// Pick the auth provider based on what's configured:
+    /// `GOOGLE_CLIENT_ID` set → Google sign-in only (hosted SaaS shape).
+    /// Otherwise → email + password (OSS / self-hosted shape).
+    ///
+    /// Mutually exclusive on purpose: one signal, one mode, no env var to
+    /// remember. Operators wanting to test both flows side-by-side in dev can
+    /// flip the signal by un/setting `GOOGLE_CLIENT_ID`.
+    pub fn auth_provider_set(&self) -> AuthProviders {
+        let google_configured = self
+            .google_client_id
+            .as_deref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if google_configured {
+            AuthProviders {
+                google: true,
+                password: false,
+            }
+        } else {
+            AuthProviders {
+                google: false,
+                password: true,
+            }
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct AuthProviders {
+    pub google: bool,
+    pub password: bool,
 }
 
 pub fn get_config() -> Result<Config, config::ConfigError> {
@@ -61,6 +111,9 @@ pub fn get_config() -> Result<Config, config::ConfigError> {
 
     RawConfig::builder()
         .set_default("application_port", 18200)?
+        .set_default("admin_company_name", "Default")?
+        .set_default("invite_token_ttl_days", 14)?
+        .set_default("app_base_url", "")?
         .set_default("sqlite_url", "sqlite://easy-experiments.db")?
         .set_default("duckdb_path", "easy-experiments.duckdb")?
         .set_default("event_queue_capacity", 10_000)?
