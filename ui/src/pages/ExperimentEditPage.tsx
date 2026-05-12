@@ -17,11 +17,11 @@ function lockModeForStatus(status: string): ExperimentFormLockMode {
 }
 
 function headerCopyForStatus(status: string): string {
-  if (status === 'draft') return 'Draft experiment — all fields editable.';
+  if (status === 'draft') return 'Draft experiment. All fields editable.';
   if (status === 'running') {
-    return 'Running — description and rollout % are editable. Variants, primary metric, and segment shape are locked.';
+    return 'Running. Description and rollout % are editable. Variants, primary metric, and segment shape are locked.';
   }
-  return 'Stopped — only description is editable. Create a new experiment to test something else.';
+  return 'Stopped. Only description is editable. Create a new experiment to test something else.';
 }
 
 export function ExperimentEditPage() {
@@ -49,7 +49,7 @@ export function ExperimentEditPage() {
       if (err instanceof ApiError && err.status === 412) {
         queryClient.invalidateQueries({ queryKey: ['experiment', id] });
         toast.error(
-          'Someone else updated this experiment. We loaded the latest version — please review and resubmit.',
+          'Someone else updated this experiment. We loaded the latest version. Please review and resubmit.',
         );
         return;
       }

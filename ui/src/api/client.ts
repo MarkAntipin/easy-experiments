@@ -106,7 +106,7 @@ export async function request<T>(
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw err;
     }
-    throw new ApiError(0, 'Network error — is the API reachable?', null);
+    throw new ApiError(0, 'Network error. Is the API reachable?', null);
   }
 
   if (response.status === 204) {

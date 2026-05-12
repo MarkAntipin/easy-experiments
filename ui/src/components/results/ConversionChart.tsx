@@ -82,7 +82,7 @@ export function ConversionChart({ variants, variantKeyOrder }: ConversionChartPr
         </h2>
         <p className="mt-0.5 text-sm text-slate-500">
           Bars show the observed rate. The horizontal whisker marks the Wilson
-          95% confidence interval — overlapping whiskers mean the difference
+          95% confidence interval. Overlapping whiskers mean the difference
           might just be noise.
         </p>
       </div>

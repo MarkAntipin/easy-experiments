@@ -10,6 +10,11 @@ interface DistributionInput {
 export interface SegmentDistributionProps {
   distributions: DistributionInput[];
   variantKeys: readonly string[];
+  /**
+   * Segment-level rollout, 0-100. Variant slices are scaled by this share and
+   * the remainder shows as a gray "excluded by rollout" wedge. Defaults to 100.
+   */
+  rolloutPercent?: number;
 }
 
 const SIZE = 128;
@@ -22,6 +27,11 @@ const EPSILON = 0.0001;
 function clampNonNeg(n: number): number {
   if (Number.isNaN(n)) return 0;
   return Math.max(0, n);
+}
+
+function clampHundred(n: number): number {
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(100, n));
 }
 
 function polarToCartesian(angleDeg: number, r: number) {
@@ -57,7 +67,11 @@ function formatPct(n: number): string {
 export function SegmentDistribution({
   distributions,
   variantKeys,
+  rolloutPercent = 100,
 }: SegmentDistributionProps) {
+  const rollout = clampHundred(Number(rolloutPercent));
+  const rolloutFrac = rollout / 100;
+
   const items = distributions.map((d) => ({
     variantKey: d.variantKey,
     pct: clampNonNeg(Number(d.percent) || 0),
@@ -68,11 +82,13 @@ export function SegmentDistribution({
   const balanced = Math.abs(distSum - 100) < EPSILON;
   const overAllocated = distSum > 100 + EPSILON;
 
-  // When over-allocated we scale slices to sum so the chart still renders as a
-  // full circle; the over-allocation is surfaced through the status pill and
-  // explicit warning text below. Under-allocation leaves a hatched wedge.
+  // When over-allocated we scale slices proportionally so they fill the
+  // rolled-out share of the wheel; the over-allocation is surfaced through the
+  // status pill and explicit warning text below. Under-allocation within the
+  // segment leaves an amber hatched wedge; rollout < 100 leaves a separate
+  // gray "excluded by rollout" wedge.
   const denom = overAllocated ? distSum : 100;
-  const angleFor = (pct: number) => (pct / denom) * 360;
+  const angleFor = (pct: number) => (pct / denom) * rolloutFrac * 360;
 
   let cursor = 0;
   const slices = items.map((item, i) => {
@@ -80,30 +96,48 @@ export function SegmentDistribution({
     const start = cursor;
     const end = cursor + sweep;
     cursor = end;
+    const effectivePct = (item.pct / denom) * rollout;
     return {
       key: `${item.variantKey || '__empty__'}-${i}`,
       variantKey: item.variantKey,
-      pct: item.pct,
+      effectivePct,
       start,
       end,
       color: variantColorByKey(variantKeys, item.variantKey),
     };
   });
-  const unallocatedSweep = undershoot > 0 ? (undershoot / 100) * 360 : 0;
+
+  const unallocatedSweep =
+    !overAllocated && undershoot > 0
+      ? (undershoot / 100) * rolloutFrac * 360
+      : 0;
   const unallocatedStart = cursor;
   const unallocatedEnd = cursor + unallocatedSweep;
+  cursor = unallocatedEnd;
+  const unallocatedEffectivePct = (undershoot / 100) * rollout;
+
+  const excludedSweep = rollout < 100 ? ((100 - rollout) / 100) * 360 : 0;
+  const excludedStart = cursor;
+  const excludedEnd = cursor + excludedSweep;
+  const excludedPct = 100 - rollout;
 
   let statusText: string;
   let statusClass: string;
-  if (balanced) {
+  if (overAllocated) {
+    statusText = `${formatPct(distSum)}% within · over by ${formatPct(overshoot)}%`;
+    statusClass = 'text-red-600';
+  } else if (undershoot > 0) {
+    statusText = `${formatPct(undershoot)}% unallocated within`;
+    statusClass = 'text-amber-600';
+  } else if (rollout < 100) {
+    statusText = `${formatPct(rollout)}% rolled out`;
+    statusClass = 'text-slate-600';
+  } else if (balanced) {
     statusText = '100%';
     statusClass = 'text-emerald-600';
-  } else if (overAllocated) {
-    statusText = `${formatPct(distSum)}% · over by ${formatPct(overshoot)}%`;
-    statusClass = 'text-red-600';
   } else {
-    statusText = `${formatPct(distSum)}% · ${formatPct(undershoot)}% unallocated`;
-    statusClass = 'text-amber-600';
+    statusText = `${formatPct(distSum)}%`;
+    statusClass = 'text-slate-600';
   }
 
   return (
@@ -134,6 +168,16 @@ export function SegmentDistribution({
             <rect width="6" height="6" fill="#fef3c7" />
             <rect width="3" height="6" fill="#fde68a" />
           </pattern>
+          <pattern
+            id="seg-dist-excluded"
+            patternUnits="userSpaceOnUse"
+            width="6"
+            height="6"
+            patternTransform="rotate(45)"
+          >
+            <rect width="6" height="6" fill="#f1f5f9" />
+            <rect width="3" height="6" fill="#cbd5e1" />
+          </pattern>
         </defs>
         <circle cx={CX} cy={CY} r={R_OUTER} fill="#f1f5f9" />
         {slices.map((s) =>
@@ -149,6 +193,12 @@ export function SegmentDistribution({
           <path
             d={donutSlicePath(unallocatedStart, unallocatedEnd)}
             fill="url(#seg-dist-unalloc)"
+          />
+        ) : null}
+        {excludedSweep > 0 ? (
+          <path
+            d={donutSlicePath(excludedStart, excludedEnd)}
+            fill="url(#seg-dist-excluded)"
           />
         ) : null}
         <circle cx={CX} cy={CY} r={R_INNER} fill="white" />
@@ -181,16 +231,27 @@ export function SegmentDistribution({
                 {s.variantKey || '—'}
               </span>
               <span className="ml-auto shrink-0 tabular-nums text-slate-500">
-                {formatPct(s.pct)}%
+                {formatPct(s.effectivePct)}%
               </span>
             </li>
           ))}
-          {undershoot > 0 ? (
+          {unallocatedSweep > 0 ? (
             <li className="flex items-center gap-2 text-amber-700">
               <span className="inline-block h-3 w-3 shrink-0 rounded-sm bg-amber-300" />
               <span className="min-w-0 truncate font-medium">unallocated</span>
               <span className="ml-auto shrink-0 tabular-nums">
-                {formatPct(undershoot)}%
+                {formatPct(unallocatedEffectivePct)}%
+              </span>
+            </li>
+          ) : null}
+          {excludedSweep > 0 ? (
+            <li className="flex items-center gap-2 text-slate-500">
+              <span className="inline-block h-3 w-3 shrink-0 rounded-sm bg-slate-300" />
+              <span className="min-w-0 truncate font-medium">
+                excluded by rollout
+              </span>
+              <span className="ml-auto shrink-0 tabular-nums">
+                {formatPct(excludedPct)}%
               </span>
             </li>
           ) : null}

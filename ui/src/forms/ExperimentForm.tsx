@@ -223,7 +223,7 @@ export function ExperimentForm({
             hint={
               shapeLocked
                 ? "Can't be changed once the experiment has started."
-                : "Identifier for the outcome you're optimizing — track it in your analytics so you can compare variants."
+                : "Identifier for the outcome you're optimizing. Track it in your analytics so you can compare variants."
             }
           >
             <Input
@@ -237,6 +237,7 @@ export function ExperimentForm({
             label="Description"
             htmlFor="description"
             error={errors.description?.message}
+            hint="State the hypothesis: if you change X, you expect Y to move, because Z."
             className="sm:col-span-2"
           >
             <Textarea
@@ -325,8 +326,8 @@ function VariantsSection({
             {locked ? <ReadOnlyTag /> : null}
           </h2>
           <p className="text-sm text-slate-500">
-            The different versions you want to test. Mark one as the control —
-            the others will be compared against it.
+            The different versions you want to test. Mark one as the control.
+            The others will be compared against it.
           </p>
         </div>
         {!locked ? (
@@ -573,6 +574,7 @@ function SegmentCard({
   });
 
   const distributions = form.watch(`segments.${index}.distributions`);
+  const rolloutPercent = form.watch(`segments.${index}.rolloutPercent`);
   const sum = (distributions ?? []).reduce(
     (acc, d) => acc + (Number(d?.percent) || 0),
     0,
@@ -605,6 +607,7 @@ function SegmentCard({
             percent: Number(d?.percent) || 0,
           }))}
           variantKeys={variantKeys}
+          rolloutPercent={Number(rolloutPercent) || 0}
         />
       </div>
 
@@ -628,7 +631,7 @@ function SegmentCard({
           error={err?.rolloutPercent?.message}
           hint={
             shapeLocked && !rolloutLocked
-              ? 'Adjustable while running — can only increase, not decrease.'
+              ? 'Adjustable while running. Can only increase, not decrease.'
               : 'Portion of eligible users bucketed into this segment.'
           }
         >
@@ -677,7 +680,7 @@ function SegmentCard({
         </div>
         {constraintArray.fields.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No constraints — all users match this segment.
+            No constraints. All users match this segment.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -801,7 +804,7 @@ function SegmentCard({
                       disabled={shapeLocked}
                       aria-invalid={!!dErr?.variantKey}
                     >
-                      <option value="">— pick variant —</option>
+                      <option value="">Pick a variant</option>
                       {variantKeys.map((k) => (
                         <option key={k} value={k}>
                           {k}

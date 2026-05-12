@@ -161,7 +161,7 @@ export function ApiKeysPage() {
           setNameError(null);
         }}
         title="Create API key"
-        description="Give this key a descriptive name — for example the service that will use it."
+        description="Give this key a descriptive name, for example the service that will use it."
       >
         <form
           onSubmit={(e) => {

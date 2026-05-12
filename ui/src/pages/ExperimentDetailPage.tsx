@@ -261,7 +261,7 @@ export function ExperimentDetailPage() {
         open={confirmStop}
         onClose={() => setConfirmStop(false)}
         title="Stop experiment?"
-        description="Users will stop being assigned variants. The experiment can't be restarted — you'd need to create a new one."
+        description="Users will stop being assigned variants. The experiment can't be restarted; you'd need to create a new one."
       >
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setConfirmStop(false)}>

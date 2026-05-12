@@ -268,7 +268,7 @@ function FootnoteCard({ results }: { results: ResultsResponse }) {
         <li>
           P-values are <strong>not corrected</strong> for multiple comparisons.
           With 3+ variants, the chance of seeing one "significant" arm by random
-          variation alone goes up — interpret narrow wins cautiously.
+          variation alone goes up. Interpret narrow wins cautiously.
         </li>
       </ul>
     </div>

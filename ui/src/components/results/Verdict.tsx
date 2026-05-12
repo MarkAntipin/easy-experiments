@@ -225,7 +225,7 @@ function VerdictCard({
     const c = verdict.control;
     const ci = absoluteDiffCI(v, c);
     return (
-      <Shell tone="negative" icon={AlertOctagon} badge="Stop — treatment is hurting">
+      <Shell tone="negative" icon={AlertOctagon} badge="Stop, treatment is hurting">
         <Headline>
           <span className="font-mono">{v.variantKey}</span> is significantly
           worse than control
