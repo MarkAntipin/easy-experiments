@@ -12,4 +12,8 @@ pub use experiments::{
     CreateExperimentOutcome, DeleteExperimentOutcome, StartExperimentOutcome, StopExperimentOutcome,
     UpdateExperimentFields, UpdateExperimentOutcome,
 };
-pub use users::{db_create_user_and_company, db_find_user_by_google_sub, db_update_user_profile};
+pub use users::{
+    db_bind_user_google_sub, db_create_pending_user, db_create_user_and_company, db_delete_user,
+    db_find_user_by_email, db_find_user_by_google_sub, db_list_company_users,
+    db_update_user_profile, db_user_exists_in_company, CreatePendingUserOutcome,
+};

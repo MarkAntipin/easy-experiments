@@ -14,6 +14,7 @@ import { ExperimentDetailPage } from '@/pages/ExperimentDetailPage';
 import { ExperimentEditPage } from '@/pages/ExperimentEditPage';
 import { ExperimentResultsPage } from '@/pages/ExperimentResultsPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { TeamPage } from '@/pages/TeamPage';
 import { GuidePage } from '@/pages/GuidePage';
 
 const queryClient = new QueryClient({
@@ -74,6 +75,7 @@ export default function App() {
                   element={<ExperimentResultsPage />}
                 />
                 <Route path="/api-keys" element={<ApiKeysPage />} />
+                <Route path="/team" element={<TeamPage />} />
                 <Route path="/guide" element={<GuidePage />} />
               </Route>
               <Route path="*" element={<Navigate to="/experiments" replace />} />

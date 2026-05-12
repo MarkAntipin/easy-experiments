@@ -100,6 +100,21 @@ export interface CreateApiKeyResponse extends ApiKeySummary {
   key: string;
 }
 
+export type UserStatus = 'pending' | 'active';
+
+export interface UserSummary {
+  userId: string;
+  email: string;
+  name: string | null;
+  pictureUrl: string | null;
+  status: UserStatus;
+  createdAt: number;
+}
+
+export interface UserListResponse {
+  items: UserSummary[];
+}
+
 export interface AuthUser {
   userId: string;
   email: string;

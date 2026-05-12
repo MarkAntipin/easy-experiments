@@ -161,6 +161,34 @@ impl TestApp {
             .expect("DELETE /admin/v1/api-keys/{id}")
     }
 
+    pub async fn post_user(&self, body: &Value) -> reqwest::Response {
+        self.client
+            .post(self.url("/admin/v1/users"))
+            .bearer_auth(&self.token)
+            .json(body)
+            .send()
+            .await
+            .expect("POST /admin/v1/users")
+    }
+
+    pub async fn list_users(&self) -> reqwest::Response {
+        self.client
+            .get(self.url("/admin/v1/users"))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .expect("GET /admin/v1/users")
+    }
+
+    pub async fn delete_user(&self, id: &str) -> reqwest::Response {
+        self.client
+            .delete(self.url(&format!("/admin/v1/users/{id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .expect("DELETE /admin/v1/users/{id}")
+    }
+
     /// Provision an API key for the test user via the service layer (bypasses
     /// the admin route to keep the evaluate suite focused on /evaluate).
     /// Returns the plaintext to put in `X-Api-Key`.

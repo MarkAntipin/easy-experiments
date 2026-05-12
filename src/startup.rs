@@ -31,7 +31,7 @@ const ADMIN_JSON_BODY_LIMIT: usize = 256 * 1024;
 use crate::{
     errors::CustomError,
     models::{ExperimentsDB, JwtSecret},
-    repository::db_find_api_key_by_hash,
+    repository::{db_find_api_key_by_hash, db_user_exists_in_company},
     routes::{
         create_api_key,
         create_experiment,
@@ -42,7 +42,10 @@ use crate::{
         get_experiments,
         google_login,
         health_check,
+        invite_user,
         list_api_keys,
+        list_users,
+        remove_user,
         revoke_api_key,
         start_experiment,
         stop_experiment,
@@ -137,6 +140,16 @@ async fn jwt_auth_middleware(
 
     let user = verify_jwt(token, &jwt_secret.0)?;
 
+    // Signature alone isn't enough: a JWT minted before the user was removed
+    // would still be valid. Check the row still exists so a deleted user's
+    // open browser window stops working immediately on its next API call.
+    let db = req
+        .app_data::<web::Data<ExperimentsDB>>()
+        .ok_or_else(|| CustomError::InternalError("Database not configured".to_string()))?;
+    if !db_user_exists_in_company(db, &user.user_id, &user.company_id).await? {
+        return Err(CustomError::UnauthorizedError("user no longer has access".to_string()).into());
+    }
+
     req.extensions_mut().insert(user);
 
     next.call(req).await
@@ -198,6 +211,13 @@ pub fn run(
                         .route("", web::post().to(create_api_key))
                         .route("", web::get().to(list_api_keys))
                         .route("/{id}", web::delete().to(revoke_api_key))
+                )
+                .service(
+                    web::scope("/users")
+                        .wrap(from_fn(jwt_auth_middleware))
+                        .route("", web::post().to(invite_user))
+                        .route("", web::get().to(list_users))
+                        .route("/{id}", web::delete().to(remove_user))
                 )
                 .service(
                     web::scope("/auth")

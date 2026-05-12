@@ -8,6 +8,7 @@ mod experiment;
 mod exposure;
 mod metric;
 mod track;
+mod user;
 
 pub use analytics::*;
 pub use api_key::*;
@@ -19,3 +20,4 @@ pub use experiment::*;
 pub use exposure::*;
 pub use metric::*;
 pub use track::*;
+pub use user::*;

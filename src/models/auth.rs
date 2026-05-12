@@ -25,7 +25,7 @@ pub struct UserRow {
     pub email: String,
     pub name: Option<String>,
     pub picture_url: Option<String>,
-    pub google_sub: String,
+    pub google_sub: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
