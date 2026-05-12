@@ -19,7 +19,7 @@ use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use uuid::Uuid;
 
-use easy_experiments::models::{AuthenticatedUser, ExperimentsDB};
+use easy_experiments::models::{AuthenticatedUser, ExperimentsDB, UserRole};
 use easy_experiments::repository::duckdb::open_and_bootstrap;
 use easy_experiments::services::analytics::{DuckDBReadPool, ResultsService};
 use easy_experiments::services::exposure::{EventSink, NoopEventSink};
@@ -48,9 +48,31 @@ impl TestApp {
     }
 
     /// Seed a second company+user and return a JWT for them. Useful for
-    /// testing multi-tenant isolation.
+    /// testing multi-tenant isolation. The seeded user is an admin (matches
+    /// the real-world rule that the company creator owns the workspace).
     pub async fn seed_other_user(&self) -> (AuthenticatedUser, String) {
-        let (user, _) = seed_company_and_user(&self.pool, "other-co", "other@example.com").await;
+        let (user, _) = seed_company_and_user(
+            &self.pool,
+            "other-co",
+            "other@example.com",
+            UserRole::Admin,
+        )
+        .await;
+        let token = create_jwt(&user, TEST_JWT_SECRET).expect("mint jwt");
+        (user, token)
+    }
+
+    /// Seed an additional `member`-role user inside the *current* tenant and
+    /// return a JWT for them. Used to test that non-admins can't invite or
+    /// remove.
+    pub async fn seed_member_in_same_company(&self, email: &str) -> (AuthenticatedUser, String) {
+        let user = seed_user_in_company(
+            &self.pool,
+            &self.user.company_id,
+            email,
+            UserRole::Member,
+        )
+        .await;
         let token = create_jwt(&user, TEST_JWT_SECRET).expect("mint jwt");
         (user, token)
     }
@@ -255,7 +277,7 @@ impl TestApp {
 async fn spawn_app() -> TestApp {
     let pool = build_pool().await;
     run_migrations(&pool).await;
-    let (user, _) = seed_company_and_user(&pool, "acme", "owner@acme.test").await;
+    let (user, _) = seed_company_and_user(&pool, "acme", "owner@acme.test", UserRole::Admin).await;
     let token = create_jwt(&user, TEST_JWT_SECRET).expect("mint jwt");
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
@@ -332,11 +354,10 @@ async fn seed_company_and_user(
     pool: &SqlitePool,
     company_name: &str,
     email: &str,
+    role: UserRole,
 ) -> (AuthenticatedUser, String) {
     let now = Utc::now().timestamp_millis();
     let company_id = Uuid::new_v4().to_string();
-    let user_id = Uuid::new_v4().to_string();
-    let google_sub = format!("test-sub-{}", Uuid::new_v4());
 
     sqlx::query("INSERT INTO companies (company_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)")
         .bind(&company_id)
@@ -347,26 +368,41 @@ async fn seed_company_and_user(
         .await
         .expect("insert company");
 
+    let user = seed_user_in_company(pool, &company_id, email, role).await;
+    (user, company_id)
+}
+
+#[allow(dead_code)]
+async fn seed_user_in_company(
+    pool: &SqlitePool,
+    company_id: &str,
+    email: &str,
+    role: UserRole,
+) -> AuthenticatedUser {
+    let now = Utc::now().timestamp_millis();
+    let user_id = Uuid::new_v4().to_string();
+    let google_sub = format!("test-sub-{}", Uuid::new_v4());
+
     sqlx::query(
-        "INSERT INTO users (user_id, company_id, email, name, picture_url, google_sub, created_at, updated_at)
-         VALUES ($1, $2, $3, NULL, NULL, $4, $5, $6)",
+        "INSERT INTO users (user_id, company_id, email, name, picture_url, google_sub, role, created_at, updated_at)
+         VALUES ($1, $2, $3, NULL, NULL, $4, $5, $6, $6)",
     )
     .bind(&user_id)
-    .bind(&company_id)
+    .bind(company_id)
     .bind(email)
     .bind(&google_sub)
-    .bind(now)
+    .bind(role)
     .bind(now)
     .execute(pool)
     .await
     .expect("insert user");
 
-    let user = AuthenticatedUser {
+    AuthenticatedUser {
         user_id,
-        company_id: company_id.clone(),
+        company_id: company_id.to_string(),
         email: email.to_string(),
-    };
-    (user, company_id)
+        role,
+    }
 }
 
 // -- Fixture builders ---------------------------------------------------------

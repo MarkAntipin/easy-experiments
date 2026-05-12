@@ -101,6 +101,7 @@ export interface CreateApiKeyResponse extends ApiKeySummary {
 }
 
 export type UserStatus = 'pending' | 'active';
+export type UserRole = 'admin' | 'member';
 
 export interface UserSummary {
   userId: string;
@@ -108,6 +109,7 @@ export interface UserSummary {
   name: string | null;
   pictureUrl: string | null;
   status: UserStatus;
+  role: UserRole;
   createdAt: number;
 }
 
@@ -120,6 +122,7 @@ export interface AuthUser {
   email: string;
   name: string | null;
   pictureUrl: string | null;
+  role: UserRole;
 }
 
 export interface AuthCompany {

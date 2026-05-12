@@ -75,6 +75,25 @@ async fn list_users_excludes_other_tenants() {
 }
 
 #[tokio::test]
+async fn list_users_includes_role() {
+    // Owner is admin (created the company); invitee defaults to member.
+    let app = TestApp::spawn().await;
+    invited_id(&app, "alice@acme.test").await;
+
+    let response = app.list_users().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = response.json().await.unwrap();
+    let items = body["items"].as_array().expect("items array");
+    let by_email: std::collections::HashMap<&str, &Value> = items
+        .iter()
+        .map(|i| (i["email"].as_str().unwrap(), i))
+        .collect();
+
+    assert_eq!(by_email[&app.user.email.as_str()]["role"], "admin");
+    assert_eq!(by_email["alice@acme.test"]["role"], "member");
+}
+
+#[tokio::test]
 async fn list_users_missing_jwt_unauthorized() {
     let app = TestApp::spawn().await;
     let response = app

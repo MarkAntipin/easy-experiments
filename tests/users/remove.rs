@@ -118,6 +118,32 @@ async fn remove_user_missing_jwt_unauthorized() {
 }
 
 #[tokio::test]
+async fn remove_user_as_member_forbidden() {
+    // Only admins can remove members. A member-role caller gets 403; the
+    // target row must survive.
+    let app = TestApp::spawn().await;
+    let target_id = invited_id(&app, "target@acme.test").await;
+    let (_, member_token) = app.seed_member_in_same_company("member@acme.test").await;
+
+    let response = app
+        .raw_client()
+        .delete(format!("{}/admin/v1/users/{target_id}", app.addr()))
+        .bearer_auth(member_token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
+            .bind(&target_id)
+            .fetch_one(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(count.0, 1, "target should survive a member's delete attempt");
+}
+
+#[tokio::test]
 async fn removed_users_existing_jwt_is_rejected_on_next_call() {
     // Closes the "open tab keeps working" hole: a JWT only proves who you
     // *were* at mint time, so the middleware must re-check that the user

@@ -11,6 +11,11 @@ pub async fn remove_user(
     actor: web::ReqData<AuthenticatedUser>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, CustomError> {
+    if !actor.role.is_admin() {
+        return Err(CustomError::ForbiddenError(
+            "Only admins can remove members".into(),
+        ));
+    }
     let id = id.into_inner().to_string();
     user::remove(&db, &id, &actor.company_id, &actor.user_id).await?;
 

@@ -2,9 +2,9 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::errors::CustomError;
-use crate::models::{CompanyRow, ExperimentsDB, UserRow};
+use crate::models::{CompanyRow, ExperimentsDB, UserRole, UserRow};
 
-const USER_COLS: &str = "user_id, company_id, email, name, picture_url, google_sub, created_at, updated_at";
+const USER_COLS: &str = "user_id, company_id, email, name, picture_url, google_sub, role, created_at, updated_at";
 
 pub async fn db_find_user_by_google_sub(
     db: &ExperimentsDB,
@@ -129,10 +129,11 @@ pub async fn db_create_user_and_company(
             name,
             picture_url,
             google_sub,
+            role,
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ",
     )
     .bind(&user_id)
@@ -141,6 +142,7 @@ pub async fn db_create_user_and_company(
     .bind(name)
     .bind(picture_url)
     .bind(google_sub)
+    .bind(UserRole::Admin)
     .bind(now)
     .bind(now)
     .execute(&mut *tx)
@@ -156,6 +158,7 @@ pub async fn db_create_user_and_company(
         name: name.map(str::to_string),
         picture_url: picture_url.map(str::to_string),
         google_sub: Some(google_sub.to_string()),
+        role: UserRole::Admin,
         created_at: now,
         updated_at: now,
     };
@@ -218,6 +221,7 @@ pub async fn db_create_pending_user(
         name: None,
         picture_url: None,
         google_sub: None,
+        role: UserRole::Member,
         created_at: now,
         updated_at: now,
     }))
@@ -277,18 +281,18 @@ pub async fn db_delete_user(
     Ok(rows.rows_affected() > 0)
 }
 
-pub async fn db_user_exists_in_company(
+pub async fn db_fetch_user_role(
     db: &ExperimentsDB,
     user_id: &str,
     company_id: &str,
-) -> Result<bool, CustomError> {
-    let row: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM users WHERE user_id = $1 AND company_id = $2",
+) -> Result<Option<UserRole>, CustomError> {
+    let row: Option<(UserRole,)> = sqlx::query_as(
+        "SELECT role FROM users WHERE user_id = $1 AND company_id = $2",
     )
     .bind(user_id)
     .bind(company_id)
     .fetch_optional(&db.pool)
     .await
     .map_err(CustomError::from)?;
-    Ok(row.is_some())
+    Ok(row.map(|(r,)| r))
 }

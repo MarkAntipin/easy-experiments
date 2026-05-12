@@ -14,6 +14,6 @@ pub use experiments::{
 };
 pub use users::{
     db_bind_user_google_sub, db_create_pending_user, db_create_user_and_company, db_delete_user,
-    db_find_user_by_email, db_find_user_by_google_sub, db_list_company_users,
-    db_update_user_profile, db_user_exists_in_company, CreatePendingUserOutcome,
+    db_fetch_user_role, db_find_user_by_email, db_find_user_by_google_sub, db_list_company_users,
+    db_update_user_profile, CreatePendingUserOutcome,
 };

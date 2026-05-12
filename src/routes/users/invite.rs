@@ -11,6 +11,11 @@ pub async fn invite_user(
     actor: web::ReqData<AuthenticatedUser>,
     payload: ValidatedJson<InviteUserRequest>,
 ) -> Result<HttpResponse, CustomError> {
+    if !actor.role.is_admin() {
+        return Err(CustomError::ForbiddenError(
+            "Only admins can invite members".into(),
+        ));
+    }
     let request = payload.into_inner();
     let invited = user::invite(&db, &actor.company_id, &request.email).await?;
 

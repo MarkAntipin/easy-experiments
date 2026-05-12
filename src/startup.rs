@@ -31,7 +31,7 @@ const ADMIN_JSON_BODY_LIMIT: usize = 256 * 1024;
 use crate::{
     errors::CustomError,
     models::{ExperimentsDB, JwtSecret},
-    repository::{db_find_api_key_by_hash, db_user_exists_in_company},
+    repository::{db_fetch_user_role, db_find_api_key_by_hash},
     routes::{
         create_api_key,
         create_experiment,
@@ -138,17 +138,25 @@ async fn jwt_auth_middleware(
         .app_data::<web::Data<JwtSecret>>()
         .ok_or_else(|| CustomError::InternalError("JWT secret not configured".to_string()))?;
 
-    let user = verify_jwt(token, &jwt_secret.0)?;
+    let identity = verify_jwt(token, &jwt_secret.0)?;
 
     // Signature alone isn't enough: a JWT minted before the user was removed
-    // would still be valid. Check the row still exists so a deleted user's
-    // open browser window stops working immediately on its next API call.
+    // would still be valid. Re-read the row on every request so a deleted
+    // user's open browser window stops working immediately, and so role
+    // changes take effect without a token refresh.
     let db = req
         .app_data::<web::Data<ExperimentsDB>>()
         .ok_or_else(|| CustomError::InternalError("Database not configured".to_string()))?;
-    if !db_user_exists_in_company(db, &user.user_id, &user.company_id).await? {
-        return Err(CustomError::UnauthorizedError("user no longer has access".to_string()).into());
-    }
+    let role = db_fetch_user_role(db, &identity.user_id, &identity.company_id)
+        .await?
+        .ok_or_else(|| CustomError::UnauthorizedError("user no longer has access".to_string()))?;
+
+    let user = crate::models::AuthenticatedUser {
+        user_id: identity.user_id,
+        company_id: identity.company_id,
+        email: identity.email,
+        role,
+    };
 
     req.extensions_mut().insert(user);
 

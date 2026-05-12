@@ -17,6 +17,16 @@ struct Claims {
     exp: usize,
 }
 
+/// Identity claims as carried by the JWT. Role is intentionally NOT in the
+/// token — it's re-read from the DB on every request so promotion / demotion
+/// takes effect immediately without forcing a token refresh.
+#[derive(Debug, Clone)]
+pub struct JwtIdentity {
+    pub user_id: String,
+    pub company_id: String,
+    pub email: String,
+}
+
 pub fn create_jwt(user: &AuthenticatedUser, secret: &str) -> Result<String, CustomError> {
     let expiration = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::days(7))
@@ -40,7 +50,7 @@ pub fn create_jwt(user: &AuthenticatedUser, secret: &str) -> Result<String, Cust
     .map_err(|e| CustomError::InternalError(format!("Failed to create JWT: {}", e)))
 }
 
-pub fn verify_jwt(token: &str, secret: &str) -> Result<AuthenticatedUser, CustomError> {
+pub fn verify_jwt(token: &str, secret: &str) -> Result<JwtIdentity, CustomError> {
     let mut validation = Validation::default();
     validation.set_issuer(&[JWT_ISSUER]);
     validation.set_audience(&[JWT_AUDIENCE]);
@@ -52,7 +62,7 @@ pub fn verify_jwt(token: &str, secret: &str) -> Result<AuthenticatedUser, Custom
     )
     .map_err(|e| CustomError::UnauthorizedError(format!("Invalid token: {}", e)))?;
 
-    Ok(AuthenticatedUser {
+    Ok(JwtIdentity {
         user_id: token_data.claims.sub,
         company_id: token_data.claims.company_id,
         email: token_data.claims.email,

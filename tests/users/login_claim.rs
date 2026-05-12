@@ -6,7 +6,7 @@
 //! Google-signed token; we drive `services::auth::provision_and_mint` directly
 //! with a constructed `GoogleTokenInfo`.
 
-use easy_experiments::models::ExperimentsDB;
+use easy_experiments::models::{ExperimentsDB, UserRole};
 use easy_experiments::services::auth::provision_and_mint;
 use easy_experiments::services::google_auth::GoogleTokenInfo;
 use reqwest::StatusCode;
@@ -118,7 +118,8 @@ async fn email_normalized_when_claiming_stub() {
 async fn unknown_email_still_auto_creates_company() {
     // No invite, no existing user → falls through to self-serve signup
     // (current behavior). We assert this explicitly so the regression is
-    // caught if anyone tightens it later.
+    // caught if anyone tightens it later. The new tenant's founder is admin
+    // so they can subsequently invite teammates.
     let app = TestApp::spawn().await;
     let db = ExperimentsDB::new(app.pool.clone());
 
@@ -131,9 +132,29 @@ async fn unknown_email_still_auto_creates_company() {
     .await
     .expect("self-serve signup should succeed");
 
-    // assert: new company, not the seeded acme.
+    // assert: new company, not the seeded acme; founder is admin.
     assert_ne!(result.user.company_id, app.user.company_id);
     assert_eq!(result.user.email, "stranger@somewhere.test");
+    assert_eq!(result.user.role, UserRole::Admin);
+}
+
+#[tokio::test]
+async fn claimed_invite_user_is_member() {
+    // The claim path must inherit the stub's `member` role; otherwise every
+    // invitee would silently become an admin on first sign-in.
+    let app = TestApp::spawn().await;
+    invited_id(&app, "alice@acme.test").await;
+    let db = ExperimentsDB::new(app.pool.clone());
+
+    let result = provision_and_mint(
+        &db,
+        &token_info("google-sub-for-alice", "alice@acme.test"),
+        TEST_JWT_SECRET,
+    )
+    .await
+    .expect("claim should succeed");
+
+    assert_eq!(result.user.role, UserRole::Member);
 }
 
 #[tokio::test]

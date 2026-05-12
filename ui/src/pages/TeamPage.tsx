@@ -18,6 +18,7 @@ import { formatRelative, formatTimestamp } from '@/lib/format';
 export function TeamPage() {
   const { session } = useAuth();
   const currentUserId = session?.user.userId ?? '';
+  const isAdmin = session?.user.role === 'admin';
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -76,12 +77,18 @@ export function TeamPage() {
     <>
       <PageHeader
         title="Team"
-        description="Invite teammates by email. They’ll join when they sign in with Google."
+        description={
+          isAdmin
+            ? 'Invite teammates by email. They’ll join when they sign in with Google.'
+            : 'Your teammates. Only admins can invite or remove members.'
+        }
         actions={
-          <Button onClick={() => setInviteOpen(true)}>
-            <Plus aria-hidden className="h-5 w-5" />
-            Invite member
-          </Button>
+          isAdmin ? (
+            <Button onClick={() => setInviteOpen(true)}>
+              <Plus aria-hidden className="h-5 w-5" />
+              Invite member
+            </Button>
+          ) : null
         }
       />
       <PageBody>
@@ -96,6 +103,7 @@ export function TeamPage() {
                 <thead className="bg-slate-50 text-left text-sm uppercase tracking-wide text-slate-500">
                   <tr>
                     <th scope="col" className="px-5 py-3 font-medium">Member</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Role</th>
                     <th scope="col" className="px-5 py-3 font-medium">Status</th>
                     <th scope="col" className="px-5 py-3 font-medium">Added</th>
                     <th scope="col" className="px-5 py-3 font-medium text-right">Actions</th>
@@ -143,6 +151,17 @@ export function TeamPage() {
                           </div>
                         </td>
                         <td className="px-5 py-3">
+                          {u.role === 'admin' ? (
+                            <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-sm font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                              Admin
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200">
+                              Member
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
                           {isPending ? (
                             <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-800 ring-1 ring-inset ring-amber-200">
                               Pending
@@ -159,7 +178,7 @@ export function TeamPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right">
-                          {isSelf ? null : (
+                          {isSelf || !isAdmin ? null : (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -180,12 +199,18 @@ export function TeamPage() {
         ) : (
           <EmptyState
             title="No teammates yet"
-            description="Invite someone by email; they’ll show up here once you add them."
+            description={
+              isAdmin
+                ? 'Invite someone by email; they’ll show up here once you add them.'
+                : 'Ask an admin to invite teammates.'
+            }
             action={
-              <Button variant="brand" onClick={() => setInviteOpen(true)}>
-                <Plus aria-hidden className="h-5 w-5" />
-                Invite member
-              </Button>
+              isAdmin ? (
+                <Button variant="brand" onClick={() => setInviteOpen(true)}>
+                  <Plus aria-hidden className="h-5 w-5" />
+                  Invite member
+                </Button>
+              ) : undefined
             }
           />
         )}

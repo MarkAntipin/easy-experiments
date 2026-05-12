@@ -147,3 +147,28 @@ async fn invite_user_missing_jwt_unauthorized() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn invite_user_as_member_forbidden() {
+    // Only admins can invite. A member-role user in the same company gets 403.
+    let app = TestApp::spawn().await;
+    let (_, member_token) = app.seed_member_in_same_company("member@acme.test").await;
+
+    let response = app
+        .raw_client()
+        .post(format!("{}/admin/v1/users", app.addr()))
+        .bearer_auth(member_token)
+        .json(&json!({ "email": "newbie@acme.test" }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE email = $1")
+            .bind("newbie@acme.test")
+            .fetch_one(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(count.0, 0, "no row should be created on forbidden invite");
+}

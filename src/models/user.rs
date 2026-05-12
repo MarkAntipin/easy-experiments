@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::CustomError;
-use crate::models::UserRow;
+use crate::models::{UserRole, UserRow};
 use crate::validation::Validate;
 
 const MAX_EMAIL_LENGTH: usize = 256;
@@ -57,6 +57,7 @@ pub struct UserListItem {
     pub name: Option<String>,
     pub picture_url: Option<String>,
     pub status: UserStatus,
+    pub role: UserRole,
     pub created_at: i64,
 }
 
@@ -73,6 +74,7 @@ impl From<UserRow> for UserListItem {
             name: row.name,
             picture_url: row.picture_url,
             status,
+            role: row.role,
             created_at: row.created_at,
         }
     }

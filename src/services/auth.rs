@@ -48,6 +48,7 @@ pub async fn provision_and_mint(
         user_id: user.user_id.clone(),
         company_id: user.company_id.clone(),
         email: user.email.clone(),
+        role: user.role,
     };
 
     let token = create_jwt(&auth_user, jwt_secret)?;

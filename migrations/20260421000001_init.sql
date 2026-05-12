@@ -14,6 +14,8 @@ CREATE TABLE users (
     -- Nullable: a row with google_sub = NULL is a pending invite that gets
     -- claimed (sub filled in) when the invitee first signs in with Google.
     google_sub      TEXT UNIQUE,
+    role            TEXT NOT NULL DEFAULT 'member'
+        CHECK(role IN ('admin','member')),
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL
 );

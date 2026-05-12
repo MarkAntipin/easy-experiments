@@ -1,10 +1,25 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(rename_all = "lowercase")]
+pub enum UserRole {
+    Admin,
+    Member,
+}
+
+impl UserRole {
+    pub fn is_admin(self) -> bool {
+        matches!(self, UserRole::Admin)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
     pub user_id: String,
     pub company_id: String,
     pub email: String,
+    pub role: UserRole,
 }
 
 #[derive(Clone)]
@@ -26,6 +41,7 @@ pub struct UserRow {
     pub name: Option<String>,
     pub picture_url: Option<String>,
     pub google_sub: Option<String>,
+    pub role: UserRole,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -50,6 +66,7 @@ pub struct UserResponse {
     pub email: String,
     pub name: Option<String>,
     pub picture_url: Option<String>,
+    pub role: UserRole,
 }
 
 impl From<UserRow> for UserResponse {
@@ -59,6 +76,7 @@ impl From<UserRow> for UserResponse {
             email: row.email,
             name: row.name,
             picture_url: row.picture_url,
+            role: row.role,
         }
     }
 }
