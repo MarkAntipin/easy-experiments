@@ -143,16 +143,17 @@ export function ExperimentsListPage() {
               experiments.
             </p>
           </div>
+        ) : filter !== 'all' ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-12 text-center">
+            <h3 className="text-base font-semibold text-slate-900">
+              No {filter} experiments
+            </h3>
+          </div>
         ) : (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-12 text-center">
             <h3 className="text-base font-semibold text-slate-900">
-              Ready to try one?
+              No experiments yet
             </h3>
-            <p className="mx-auto mt-1.5 max-w-md text-base text-slate-500">
-              Pick a feature you&rsquo;d like to test, define a variant or
-              two, and start measuring. You can stop the experiment at any
-              time.
-            </p>
             <div className="mt-5">
               <Link to="/experiments/new">
                 <Button variant="brand">
