@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Beaker, BookOpen, KeyRound, LogOut, Users } from 'lucide-react';
+import { Beaker, KeyRound, LogOut, Users } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { LogoMark } from '@/components/Logo';
 import { cn } from '@/lib/cn';
@@ -68,7 +68,6 @@ export function Layout() {
           <NavItem to="/experiments" icon={Beaker} label="Experiments" />
           <NavItem to="/api-keys" icon={KeyRound} label="API Keys" />
           <NavItem to="/team" icon={Users} label="Team" />
-          <NavItem to="/guide" icon={BookOpen} label="Guide" />
         </nav>
         <div className="border-t border-slate-200 p-3">
           {session ? (
