@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.95-alpine AS builder
+ARG RUST_VERSION=1.95
+
+FROM rust:${RUST_VERSION}-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -12,31 +14,44 @@ RUN apk add --no-cache \
     sqlite-dev \
     cmake
 
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY migrations ./migrations
+COPY src ./src
 
-# Single static musl binary. `--bin easy-experiments` keeps helper bins like
-# `seed_loadtest` out of the production image; `--locked` honors Cargo.lock so
-# the image is bit-for-bit reproducible from a given commit.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/usr/src/app/target,sharing=locked \
-    cargo build --release --locked --bin easy-experiments && \
+    cargo build --release && \
     cp target/release/easy-experiments /usr/local/bin/easy-experiments && \
     mkdir -p /rootfs/data
 
 # ---------- Runtime ----------
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 
 COPY --from=builder /usr/local/bin/easy-experiments /easy-experiments
 COPY --from=builder --chown=65532:65532 /rootfs/data /data
 
+# Required at runtime:
+#   JWT_SECRET=<stable random secret>
+#
+# Auth mode:
+#   Password/self-hosted mode: omit GOOGLE_CLIENT_ID. If ADMIN_EMAIL and
+#   ADMIN_PASSWORD are set, the first startup on an empty /data volume creates
+#   that admin account.
+#   Google mode: set GOOGLE_CLIENT_ID. Password auth is disabled in this mode.
+#
+# Persist /data with a Docker volume or bind mount; it contains both SQLite
+# metadata and DuckDB analytics events.
 ENV APPLICATION_PORT=18200 \
-    DATABASE_URL="sqlite:///data/easy-experiments.db" \
+    SQLITE_URL="sqlite:///data/easy-experiments.db" \
     DUCKDB_PATH="/data/easy-experiments.duckdb" \
-    LOG_FORMAT=json
+    LOG_FORMAT=json \
+    RUST_LOG="info,sqlx=warn,h2=warn,hyper=warn,reqwest=warn"
 
 EXPOSE 18200
 
 VOLUME ["/data"]
+
+USER 65532:65532
 
 ENTRYPOINT ["/easy-experiments"]
