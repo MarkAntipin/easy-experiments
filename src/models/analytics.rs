@@ -10,10 +10,10 @@ pub enum Granularity {
 }
 
 impl Granularity {
-    pub fn duckdb_unit(self) -> &'static str {
+    pub fn bucket_ms(self) -> i64 {
         match self {
-            Granularity::Hour => "hour",
-            Granularity::Day => "day",
+            Granularity::Hour => 60 * 60 * 1000,
+            Granularity::Day => 24 * 60 * 60 * 1000,
         }
     }
 }

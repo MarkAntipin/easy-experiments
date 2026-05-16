@@ -52,13 +52,9 @@ impl TestApp {
     /// testing multi-tenant isolation. The seeded user is an admin (matches
     /// the real-world rule that the company creator owns the workspace).
     pub async fn seed_other_user(&self) -> (AuthenticatedUser, String) {
-        let (user, _) = seed_company_and_user(
-            &self.pool,
-            "other-co",
-            "other@example.com",
-            UserRole::Admin,
-        )
-        .await;
+        let (user, _) =
+            seed_company_and_user(&self.pool, "other-co", "other@example.com", UserRole::Admin)
+                .await;
         let token = create_jwt(&user, TEST_JWT_SECRET).expect("mint jwt");
         (user, token)
     }
@@ -67,13 +63,8 @@ impl TestApp {
     /// return a JWT for them. Used to test that non-admins can't invite or
     /// remove.
     pub async fn seed_member_in_same_company(&self, email: &str) -> (AuthenticatedUser, String) {
-        let user = seed_user_in_company(
-            &self.pool,
-            &self.user.company_id,
-            email,
-            UserRole::Member,
-        )
-        .await;
+        let user =
+            seed_user_in_company(&self.pool, &self.user.company_id, email, UserRole::Member).await;
         let token = create_jwt(&user, TEST_JWT_SECRET).expect("mint jwt");
         (user, token)
     }
@@ -249,10 +240,7 @@ impl TestApp {
             "create_experiment precondition failed: {}",
             create.status()
         );
-        let id = create
-            .json::<Value>()
-            .await
-            .unwrap()["experimentId"]
+        let id = create.json::<Value>().await.unwrap()["experimentId"]
             .as_str()
             .expect("experimentId")
             .to_string();
@@ -277,12 +265,7 @@ impl TestApp {
     /// Seed a user inside the current company with a real argon2 password hash.
     /// Used by the password-auth tests to skip the invite-accept dance when
     /// they just want to exercise login.
-    pub async fn seed_password_user(
-        &self,
-        email: &str,
-        password: &str,
-        role: UserRole,
-    ) -> String {
+    pub async fn seed_password_user(&self, email: &str, password: &str, role: UserRole) -> String {
         let user_id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp_millis();
         let hash =
@@ -380,6 +363,8 @@ async fn spawn_app() -> TestApp {
         event_sink,
         metric_sink,
         results_service,
+        None,
+        Default::default(),
     )
     .expect("start server");
 
@@ -424,14 +409,16 @@ async fn seed_company_and_user(
     let now = Utc::now().timestamp_millis();
     let company_id = Uuid::new_v4().to_string();
 
-    sqlx::query("INSERT INTO companies (company_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)")
-        .bind(&company_id)
-        .bind(company_name)
-        .bind(now)
-        .bind(now)
-        .execute(pool)
-        .await
-        .expect("insert company");
+    sqlx::query(
+        "INSERT INTO companies (company_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(&company_id)
+    .bind(company_name)
+    .bind(now)
+    .bind(now)
+    .execute(pool)
+    .await
+    .expect("insert company");
 
     let user = seed_user_in_company(pool, &company_id, email, role).await;
     (user, company_id)

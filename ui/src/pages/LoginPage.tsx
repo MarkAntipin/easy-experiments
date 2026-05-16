@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { Field, Input } from '@/components/Input';
 import { Logo } from '@/components/Logo';
+import { isGoogleAuthEnabled } from '@/lib/runtimeConfig';
 
 export function LoginPage() {
   const { isAuthenticated, loginWithGoogle, loginWithPassword } = useAuth();
@@ -23,7 +24,7 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  const hasGoogleClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  const googleEnabled = isGoogleAuthEnabled();
 
   const submitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,62 +68,55 @@ export function LoginPage() {
           Sign in to continue
         </h2>
 
-        <form onSubmit={submitPassword} className="flex flex-col gap-4">
-          <Field label="Email" required>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              placeholder="you@company.com"
+        {googleEnabled ? (
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={async (credential) => {
+                if (!credential.credential) {
+                  setErr('No credential returned from Google.');
+                  return;
+                }
+                setErr(null);
+                setSubmitting(true);
+                try {
+                  await loginWithGoogle(credential.credential);
+                } catch (e) {
+                  const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
+                  setErr(msg);
+                  toast.error(msg);
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              onError={() => setErr('Google sign-in was cancelled or failed.')}
+              useOneTap={false}
             />
-          </Field>
-          <Field label="Password" required>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              placeholder="••••••••"
-            />
-          </Field>
-          <Button type="submit" loading={submitting}>
-            Sign in
-          </Button>
-        </form>
-
-        {hasGoogleClientId ? (
-          <>
-            <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wider text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              or
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
-            <div className="flex justify-center">
-              <GoogleLogin
-                onSuccess={async (credential) => {
-                  if (!credential.credential) {
-                    setErr('No credential returned from Google.');
-                    return;
-                  }
-                  setErr(null);
-                  setSubmitting(true);
-                  try {
-                    await loginWithGoogle(credential.credential);
-                  } catch (e) {
-                    const msg = e instanceof ApiError ? e.message : 'Sign-in failed.';
-                    setErr(msg);
-                    toast.error(msg);
-                  } finally {
-                    setSubmitting(false);
-                  }
-                }}
-                onError={() => setErr('Google sign-in was cancelled or failed.')}
-                useOneTap={false}
+          </div>
+        ) : (
+          <form onSubmit={submitPassword} className="flex flex-col gap-4">
+            <Field label="Email" required>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="you@company.com"
               />
-            </div>
-          </>
-        ) : null}
+            </Field>
+            <Field label="Password" required>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+            </Field>
+            <Button type="submit" loading={submitting}>
+              Sign in
+            </Button>
+          </form>
+        )}
 
         {err ? <p className="mt-3 text-center text-sm text-red-600">{err}</p> : null}
       </div>

@@ -1,18 +1,29 @@
-# syntax=docker/dockerfile:1.7
-
 ARG RUST_VERSION=1.95
+ARG NODE_VERSION=20
 
-FROM rust:${RUST_VERSION}-alpine AS builder
+# ---------- UI build ----------
+FROM node:${NODE_VERSION}-alpine AS ui-builder
+
+WORKDIR /ui
+
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+
+COPY ui/ ./
+
+RUN npm run build
+
+# ---------- Backend build ----------
+FROM rust:${RUST_VERSION}-bookworm AS builder
 
 WORKDIR /usr/src/app
 
-RUN apk add --no-cache \
-    build-base \
-    musl-dev \
-    linux-headers \
-    pkgconfig \
-    sqlite-dev \
-    cmake
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        pkg-config \
+        libsqlite3-dev \
+        cmake \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
 COPY migrations ./migrations
@@ -26,25 +37,24 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     mkdir -p /rootfs/data
 
 # ---------- Runtime ----------
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 65532 nonroot \
+    && useradd --system --uid 65532 --gid 65532 \
+        --no-create-home --shell /usr/sbin/nologin nonroot
 
 COPY --from=builder /usr/local/bin/easy-experiments /easy-experiments
 COPY --from=builder --chown=65532:65532 /rootfs/data /data
+COPY --from=ui-builder /ui/dist /ui-dist
 
-# Required at runtime:
-#   JWT_SECRET=<stable random secret>
-#
-# Auth mode:
-#   Password/self-hosted mode: omit GOOGLE_CLIENT_ID. If ADMIN_EMAIL and
-#   ADMIN_PASSWORD are set, the first startup on an empty /data volume creates
-#   that admin account.
-#   Google mode: set GOOGLE_CLIENT_ID. Password auth is disabled in this mode.
-#
-# Persist /data with a Docker volume or bind mount; it contains both SQLite
-# metadata and DuckDB analytics events.
 ENV APPLICATION_PORT=18200 \
     SQLITE_URL="sqlite:///data/easy-experiments.db" \
     DUCKDB_PATH="/data/easy-experiments.duckdb" \
+    UI_DIST_PATH="/ui-dist" \
     LOG_FORMAT=json \
     RUST_LOG="info,sqlx=warn,h2=warn,hyper=warn,reqwest=warn"
 
@@ -54,4 +64,5 @@ VOLUME ["/data"]
 
 USER 65532:65532
 
-ENTRYPOINT ["/easy-experiments"]
+# tini kill zombies which helps DuckDB / SQLite flushes cleanly
+ENTRYPOINT ["/usr/bin/tini", "--", "/easy-experiments"]

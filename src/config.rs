@@ -20,9 +20,7 @@ pub struct Config {
     pub admin_password: Option<String>,
     pub admin_company_name: String,
 
-    /// How long an accept-invite token stays valid. 14 days is the default —
-    /// long enough to accommodate "I missed the link" without leaving stale
-    /// tokens around for months.
+    /// How long an accept-invite token stays valid. 7 days is the default.
     pub invite_token_ttl_days: u32,
 
     /// Public base URL where the UI lives. Used to render the `acceptInviteUrl`
@@ -62,6 +60,12 @@ pub struct Config {
     pub analytics_cache_ttl_secs: u64,
 
     pub cors_allowed_origins: Option<String>,
+
+    /// Absolute path to a built UI bundle (Vite `dist/`). When set and the
+    /// directory exists, the backend serves it on `/` with an SPA fallback,
+    /// so a single Docker image ships both the API and admin UI. Unset in
+    /// dev/test — `cargo run` then serves API only.
+    pub ui_dist_path: Option<String>,
 }
 
 impl Config {
@@ -74,12 +78,8 @@ impl Config {
     }
 
     /// Pick the auth provider based on what's configured:
-    /// `GOOGLE_CLIENT_ID` set → Google sign-in only (hosted SaaS shape).
-    /// Otherwise → email + password (OSS / self-hosted shape).
-    ///
-    /// Mutually exclusive on purpose: one signal, one mode, no env var to
-    /// remember. Operators wanting to test both flows side-by-side in dev can
-    /// flip the signal by un/setting `GOOGLE_CLIENT_ID`.
+    /// `GOOGLE_CLIENT_ID` set → Google sign-in only.
+    /// `ADMIN_EMAIL` and `ADMIN_PASSWORD` → email + password sign-in only.
     pub fn auth_provider_set(&self) -> AuthProviders {
         let google_configured = self
             .google_client_id
@@ -112,7 +112,7 @@ pub fn get_config() -> Result<Config, config::ConfigError> {
     RawConfig::builder()
         .set_default("application_port", 18200)?
         .set_default("admin_company_name", "Default")?
-        .set_default("invite_token_ttl_days", 14)?
+        .set_default("invite_token_ttl_days", 7)?
         .set_default("app_base_url", "")?
         .set_default("sqlite_url", "sqlite://easy-experiments.db")?
         .set_default("duckdb_path", "easy-experiments.duckdb")?

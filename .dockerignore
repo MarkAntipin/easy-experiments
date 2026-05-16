@@ -37,6 +37,11 @@ docs/
 *.duckdb.wal
 
 # Not needed by the Rust build
-ui/
 tests/
 branding/
+
+# UI: source files are needed by the ui-builder stage, but its own build
+# artifacts and dependencies must not be sent in the context (the stage
+# installs deps and builds fresh inside the image).
+ui/node_modules/
+ui/dist/

@@ -105,10 +105,10 @@ pub fn time_series(
     end_ms: i64,
     granularity: Granularity,
 ) -> Result<Vec<TimeSeriesBucket>, CustomError> {
-    let sql = format!(
-        "
+    let bucket_ms = granularity.bucket_ms();
+    let sql = "
         SELECT
-            CAST(epoch_ms(date_trunc('{unit}', to_timestamp(ts_ms / 1000.0))) AS BIGINT) AS bucket_ms,
+            CAST(floor(ts_ms / CAST(? AS DOUBLE)) AS BIGINT) * ? AS bucket_ms,
             variant_key,
             COUNT(*) AS exposures
         FROM exposures
@@ -118,14 +118,12 @@ pub fn time_series(
           AND variant_key IS NOT NULL
         GROUP BY bucket_ms, variant_key
         ORDER BY bucket_ms ASC, variant_key ASC
-        ",
-        unit = granularity.duckdb_unit()
-    );
+    ";
 
-    let mut stmt = conn.prepare(&sql).map_err(map_duckdb_err)?;
+    let mut stmt = conn.prepare(sql).map_err(map_duckdb_err)?;
     let rows = stmt
         .query_map(
-            params![company_id, experiment_id, start_ms, end_ms],
+            params![bucket_ms, bucket_ms, company_id, experiment_id, start_ms, end_ms],
             |row| {
                 let bucket_ms: i64 = row.get(0)?;
                 let variant_key: String = row.get(1)?;

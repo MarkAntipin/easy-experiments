@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client';
 import { AuthProvider } from '@/auth/AuthContext';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { Layout } from '@/components/Layout';
+import { getGoogleClientId } from '@/lib/runtimeConfig';
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ExperimentsListPage } from '@/pages/ExperimentsListPage';
@@ -36,7 +37,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
+const GOOGLE_CLIENT_ID = getGoogleClientId();
 
 export default function App() {
   return (

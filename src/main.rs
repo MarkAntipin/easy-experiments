@@ -28,9 +28,9 @@ static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 /// Initialize the tracing subscriber.
 ///
-/// `RUST_LOG` controls levels (e.g. `info,sqlx=warn`). `LOG_FORMAT=json` emits
-/// one JSON object per event for ingestion by journald/Docker/fly. Anything
-/// else uses the human-readable formatter for local dev.
+/// `RUST_LOG` controls levels (e.g. `info,sqlx=warn`).
+/// `LOG_FORMAT=json` emits one JSON object per event.
+/// Anything else uses the human-readable formatter for local dev.
 fn init_tracing() {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,sqlx=warn,h2=warn,hyper=warn,reqwest=warn"));
@@ -163,10 +163,7 @@ async fn main() -> std::io::Result<()> {
     let address = format!("0.0.0.0:{}", config.application_port);
     let listener = TcpListener::bind(address)?;
 
-    let jwt_secret = config
-        .jwt_secret
-        .clone()
-        .expect("JWT_SECRET must be set");
+    let jwt_secret = config.jwt_secret.clone().expect("JWT_SECRET must be set");
     // Auth mode is inferred from configuration:
     //   GOOGLE_CLIENT_ID set     → Google sign-in (hosted SaaS shape)
     //   GOOGLE_CLIENT_ID unset   → email + password (OSS / self-hosted shape)
@@ -253,15 +250,23 @@ async fn main() -> std::io::Result<()> {
         },
     ));
 
-    let read_pool = Arc::new(DuckDBReadPool::new(
-        duckdb_root,
-        config.analytics_pool_size,
-    ));
+    let read_pool = Arc::new(DuckDBReadPool::new(duckdb_root, config.analytics_pool_size));
     let results_service = Arc::new(ResultsService::new(
         Arc::clone(&read_pool),
         config.analytics_cache_capacity,
         Duration::from_secs(config.analytics_cache_ttl_secs),
     ));
+
+    let ui_dist_path = config
+        .ui_dist_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from);
+
+    let public_config = easy_experiments::routes::PublicConfig {
+        google_client_id: config.google_client_id.clone(),
+    };
 
     run(
         listener,
@@ -274,6 +279,8 @@ async fn main() -> std::io::Result<()> {
         event_sink,
         metric_sink,
         results_service,
+        ui_dist_path,
+        public_config,
     )?
     .await?;
 

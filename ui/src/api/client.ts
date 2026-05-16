@@ -23,10 +23,9 @@ export class ApiError extends Error {
 }
 
 function baseUrl(): string {
-  const explicit = import.meta.env.VITE_API_BASE_URL;
-  if (explicit && explicit.length > 0) {
-    return explicit.replace(/\/$/, '');
-  }
+  // UI and API are always served from the same origin: the Vite dev server
+  // proxies /admin, /api, /health, /config.js to the backend in dev, and the
+  // bundled Docker image serves UI + API on the same port in prod.
   return '';
 }
 
