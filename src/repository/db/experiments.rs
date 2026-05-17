@@ -13,9 +13,6 @@ use crate::models::{
     Variant,
 };
 
-/// Hard cap on a single experiment lookup. SQLite reads are normally sub-ms;
-/// anything close to this means the connection is wedged and we'd rather
-/// fail the request than tie up an actix worker indefinitely.
 const EXPERIMENT_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Invalidate `(company_id, key)` from the experiment cache *and* schedule

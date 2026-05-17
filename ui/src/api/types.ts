@@ -163,12 +163,8 @@ export interface VariantResult {
   isControl: boolean;
   exposures: number;
   converters: number;
-  totalConversions: number;
-  totalValue: number;
   conversionRate: number | null;
-  ci95: [number, number] | null;
   lift: number | null;
-  pValue: number | null;
 }
 
 export interface SrmShare {
@@ -178,8 +174,6 @@ export interface SrmShare {
 }
 
 export interface SrmResult {
-  chiSquare: number;
-  pValue: number;
   warning: boolean;
   expected: SrmShare[];
 }
@@ -192,18 +186,8 @@ export interface TimeSeriesBucket {
 export interface ResultsResponse {
   experimentId: string;
   experimentKey: string;
-  metricName: string;
-  windowStartMs: number;
-  windowEndMs: number;
   granularity: Granularity;
   variants: VariantResult[];
   srm: SrmResult | null;
   timeSeries: TimeSeriesBucket[];
-}
-
-export interface ResultsQueryParams {
-  start?: number;
-  end?: number;
-  granularity?: Granularity;
-  metric?: string;
 }

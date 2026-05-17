@@ -6,7 +6,6 @@ import type {
   ExperimentListResponse,
   ExperimentStatus,
   MessageResponse,
-  ResultsQueryParams,
   ResultsResponse,
   UpdateExperimentRequest,
 } from './types';
@@ -68,17 +67,8 @@ export function deleteExperiment(id: string): Promise<MessageResponse> {
   });
 }
 
-export function getExperimentResults(
-  id: string,
-  params: ResultsQueryParams = {},
-): Promise<ResultsResponse> {
-  const query: Record<string, string | number | boolean | undefined> = {};
-  if (params.start !== undefined) query.start = params.start;
-  if (params.end !== undefined) query.end = params.end;
-  if (params.granularity !== undefined) query.granularity = params.granularity;
-  if (params.metric !== undefined) query.metric = params.metric;
+export function getExperimentResults(id: string): Promise<ResultsResponse> {
   return request<ResultsResponse>(
     `/admin/v1/experiments/${encodeURIComponent(id)}/results`,
-    { query },
   );
 }

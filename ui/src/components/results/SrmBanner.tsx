@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { SrmResult } from '@/api/types';
 import { variantColorByKey } from '@/lib/variantColors';
 import { cn } from '@/lib/cn';
@@ -12,102 +13,101 @@ function formatPct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-function formatPValue(p: number): string {
-  if (p < 0.001) return '<0.001';
-  if (p < 0.01) return p.toFixed(3);
-  return p.toFixed(2);
-}
-
 export function SrmBanner({ srm, variantKeyOrder }: SrmBannerProps) {
+  const [open, setOpen] = useState(false);
+
   if (srm === null) {
     return null;
   }
 
-  if (!srm.warning) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 text-sm">
-        <span className="inline-flex items-center gap-2 font-medium text-emerald-900">
-          <CheckCircle2 aria-hidden className="h-4 w-4 text-emerald-600" />
-          Traffic split healthy
-        </span>
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {srm.expected.map((s) => {
-            const color = variantColorByKey(variantKeyOrder, s.variantKey);
-            return (
-              <span
-                key={s.variantKey}
-                className="inline-flex items-center gap-1.5 text-slate-600"
-              >
-                <span
-                  aria-hidden
-                  className="inline-block h-2 w-2 rounded-sm"
-                  style={{ backgroundColor: color.hex }}
-                />
-                <span className="font-mono text-xs">{s.variantKey}</span>
-                <span className="tabular-nums">{formatPct(s.actual)}</span>
-              </span>
-            );
-          })}
-        </span>
-        <span className="ml-auto text-xs tabular-nums text-slate-500">
-          χ² = {srm.chiSquare.toFixed(2)}, p = {formatPValue(srm.pValue)}
-        </span>
-      </div>
-    );
-  }
+  const healthy = !srm.warning;
 
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 px-5 py-4">
-      <div className="flex items-start gap-3">
-        <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
-        <div className="flex-1">
-          <div className="text-base font-semibold text-rose-900">
-            Sample ratio mismatch detected
-          </div>
-          <p className="mt-1 text-sm text-rose-800">
-            The observed traffic split does not match the configured one (χ² ={' '}
-            {srm.chiSquare.toFixed(2)}, p = {formatPValue(srm.pValue)}).{' '}
-            Common causes: a broken bucketing call site, a bot filter that drops one
-            arm, or a client-side cache. <strong>Don't trust the metrics below
-            until this is resolved.</strong>
-          </p>
-
-          <ul className="mt-3 grid gap-1.5 text-sm sm:grid-cols-2">
+    <div
+      className={cn(
+        'rounded-lg border',
+        healthy
+          ? 'border-emerald-200 bg-emerald-50/70'
+          : 'border-rose-200 bg-rose-50',
+      )}
+    >
+      <div className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+          {healthy ? (
+            <span className="inline-flex items-center gap-2 font-medium text-emerald-900">
+              <CheckCircle2 aria-hidden className="h-4 w-4 text-emerald-600" />
+              Traffic split healthy
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 font-semibold text-rose-900">
+              <AlertTriangle aria-hidden className="h-4 w-4 text-rose-600" />
+              Sample ratio mismatch detected
+            </span>
+          )}
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {srm.expected.map((s) => {
               const color = variantColorByKey(variantKeyOrder, s.variantKey);
-              const drift = s.actual - s.expected;
-              const driftClass = cn(
-                'tabular-nums',
-                Math.abs(drift) > 0.01 ? 'text-rose-700 font-medium' : 'text-slate-500',
-              );
               return (
-                <li
+                <span
                   key={s.variantKey}
-                  className="flex items-center gap-2 rounded-md bg-white/70 px-3 py-1.5"
+                  className="inline-flex items-center gap-1.5 text-slate-700"
                 >
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-sm"
                     style={{ backgroundColor: color.hex }}
                   />
-                  <span className="font-mono text-sm text-slate-700">{s.variantKey}</span>
-                  <span className="ml-auto flex items-baseline gap-1.5">
-                    <span className="tabular-nums text-slate-600">
-                      {formatPct(s.actual)}
-                    </span>
-                    <span className="text-xs text-slate-400">
+                  <span className="font-mono text-xs">{s.variantKey}</span>
+                  <span className="tabular-nums">{formatPct(s.actual)}</span>
+                  {!healthy ? (
+                    <span className="text-xs text-slate-500">
                       / {formatPct(s.expected)} expected
                     </span>
-                    <span className={driftClass}>
-                      {drift > 0 ? '+' : ''}
-                      {(drift * 100).toFixed(1)}pp
-                    </span>
-                  </span>
-                </li>
+                  ) : null}
+                </span>
               );
             })}
-          </ul>
+          </span>
         </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1 self-start rounded-md px-2 py-1 text-xs font-medium transition sm:self-auto',
+            healthy
+              ? 'text-emerald-800 hover:bg-emerald-100'
+              : 'text-rose-800 hover:bg-rose-100',
+          )}
+          aria-expanded={open}
+        >
+          How is this counted?
+          {open ? (
+            <ChevronUp aria-hidden className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+          )}
+        </button>
       </div>
+
+      {open ? (
+        <div
+          className={cn(
+            'border-t px-4 py-3 text-sm',
+            healthy
+              ? 'border-emerald-200/70 bg-white/60 text-slate-700'
+              : 'border-rose-200/70 bg-white/60 text-slate-700',
+          )}
+        >
+          <p>
+            <strong>Actual %</strong> is the share of exposures that landed on
+            each variant: variant exposures ÷ total exposures.
+          </p>
+          <p className="mt-1.5">
+            <strong>Expected %</strong> comes from the distribution you
+            configured for the experiment.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
