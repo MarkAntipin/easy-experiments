@@ -5,8 +5,8 @@
 //! The two entry points:
 //!   * `password_login` — proves identity against a stored argon2 hash.
 //!   * `accept_invite`  — consumes a one-time invite token (created by the
-//!                        existing admin invite flow), sets the user's password,
-//!                        and mints a JWT in one shot.
+//!     existing admin invite flow), sets the user's password,
+//!     and mints a JWT in one shot.
 //!
 //! Argon2 verification is intentionally slow (~50-100ms), but it only runs on
 //! login / accept-invite, never on the SDK hot path.

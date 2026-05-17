@@ -142,6 +142,7 @@ async fn jwt_auth_middleware(
     next.call(req).await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     listener: TcpListener,
     db: ExperimentsDB,
