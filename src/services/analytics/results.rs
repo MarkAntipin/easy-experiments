@@ -12,19 +12,19 @@ use crate::models::{
 };
 use crate::services::analytics::pool::DuckDBReadPool;
 use crate::services::analytics::queries::{time_series, variant_aggregates, VariantAggregate};
-use crate::services::analytics::stats::{srm_chi_square, two_proportion_ztest, wilson_95};
-use crate::services::experiment::get_experiment as load_experiment_row;
+use crate::services::analytics::stats::srm_chi_square;
+use crate::services::experiment::get_experiment;
 
-/// Hard cap on a single analytics query. DuckDB scans aren't free; if a query
-/// blows past this we return 504 rather than wedging an actix worker.
-const ANALYTICS_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
+const ANALYTICS_QUERY_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Default attribution overhang past `stopped_at`. Late conversions inside
-/// this window count; anything later does not.
 const DEFAULT_POST_STOP_OVERHANG_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
-/// (company_id, experiment_id, start_ms, end_ms, granularity, metric_name)
-type CacheKey = (String, String, i64, i64, Granularity, String);
+const END_MS_QUANTUM_MS: i64 = 60 * 1000;
+
+const HOUR_GRANULARITY_THRESHOLD_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// (company_id, experiment_id, start_ms, end_ms)
+type CacheKey = (String, String, i64, i64);
 
 pub type ResultsCache = Cache<CacheKey, Arc<ResultsResponse>>;
 
@@ -47,23 +47,15 @@ impl ResultsService {
         db: &crate::models::ExperimentsDB,
         company_id: &str,
         experiment_id: &str,
-        params: ResultsParams,
     ) -> Result<Arc<ResultsResponse>, CustomError> {
-        // Load the experiment up-front to validate ownership and pick defaults.
-        // Service-level helper handles the 404.
-        let row = load_experiment_row(db, experiment_id, company_id).await?;
-
-        // Reject inactive (deleted) experiments — but allow draft/stopped, since
-        // results are useful after stop.
-        let resolved = resolve_window_and_metric(&row, params)?;
+        let row = get_experiment(db, experiment_id, company_id).await?;
+        let resolved = resolve_window(&row);
 
         let cache_key: CacheKey = (
             company_id.to_string(),
             experiment_id.to_string(),
             resolved.start_ms,
             resolved.end_ms,
-            resolved.granularity,
-            resolved.metric_name.clone(),
         );
 
         let pool = Arc::clone(&self.pool);
@@ -85,55 +77,43 @@ impl ResultsService {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResultsParams {
-    pub start_ms: Option<i64>,
-    pub end_ms: Option<i64>,
-    pub granularity: Option<Granularity>,
-    pub metric_name: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct ResolvedParams {
+struct ResolvedWindow {
     start_ms: i64,
     end_ms: i64,
     granularity: Granularity,
     metric_name: String,
 }
 
-fn resolve_window_and_metric(
-    row: &crate::models::ExperimentRow,
-    params: ResultsParams,
-) -> Result<ResolvedParams, CustomError> {
+fn resolve_window(row: &crate::models::ExperimentRow) -> ResolvedWindow {
     let now_ms = Utc::now().timestamp_millis();
 
-    // start defaults to started_at; if that's None (draft), there can be no
-    // exposures yet — fall back to created_at so we still produce an empty
-    // but coherent response.
-    let default_start = row.started_at.unwrap_or(row.created_at);
-    let start_ms = params.start_ms.unwrap_or(default_start);
+    let start_ms = row.started_at.unwrap_or(row.created_at);
 
-    let default_end = match row.stopped_at {
+    let raw_end_ms = match row.stopped_at {
         Some(stopped) => (stopped + DEFAULT_POST_STOP_OVERHANG_MS).min(now_ms),
         None => now_ms,
     };
-    let end_ms = params.end_ms.unwrap_or(default_end);
+    let end_ms = (raw_end_ms / END_MS_QUANTUM_MS) * END_MS_QUANTUM_MS;
+    let end_ms = end_ms.max(start_ms);
 
-    if start_ms > end_ms {
-        return Err(CustomError::ValidationError(
-            "start must be <= end".into(),
-        ));
+    let granularity = if end_ms - start_ms <= HOUR_GRANULARITY_THRESHOLD_MS {
+        Granularity::Hour
+    } else {
+        Granularity::Day
+    };
+
+    ResolvedWindow {
+        start_ms,
+        end_ms,
+        granularity,
+        metric_name: row.primary_metric.clone(),
     }
-
-    let granularity = params.granularity.unwrap_or(Granularity::Day);
-    let metric_name = params.metric_name.unwrap_or_else(|| row.primary_metric.clone());
-
-    Ok(ResolvedParams { start_ms, end_ms, granularity, metric_name })
 }
 
 async fn compute_results(
     pool: Arc<DuckDBReadPool>,
     row: &crate::models::ExperimentRow,
-    resolved: ResolvedParams,
+    resolved: ResolvedWindow,
 ) -> Result<ResultsResponse, CustomError> {
     let variants: Vec<Variant> = serde_json::from_str(&row.variants).map_err(|e| {
         CustomError::InternalError(format!("failed to parse stored variants: {}", e))
@@ -178,7 +158,7 @@ async fn compute_results(
         }
     };
 
-    let response = build_response(row, &variants, &segments, resolved, aggs, series);
+    let response = build_response(row, &variants, &segments, granularity, aggs, series);
     Ok(response)
 }
 
@@ -186,7 +166,7 @@ fn build_response(
     row: &crate::models::ExperimentRow,
     variants: &[Variant],
     segments: &[Segment],
-    resolved: ResolvedParams,
+    granularity: Granularity,
     aggs: Vec<VariantAggregate>,
     series: Vec<TimeSeriesBucket>,
 ) -> ResultsResponse {
@@ -212,29 +192,24 @@ fn build_response(
             let agg = agg_by_variant.get(&v.key);
             let exposures = agg.map(|a| a.exposures).unwrap_or(0);
             let converters = agg.map(|a| a.converters).unwrap_or(0);
-            let total_conversions = agg.map(|a| a.total_conversions).unwrap_or(0);
-            let total_value = agg.map(|a| a.total_value).unwrap_or(0.0);
             let conversion_rate = if exposures > 0 {
                 Some(converters as f64 / exposures as f64)
             } else {
                 None
             };
-            let ci95 = wilson_95(converters, exposures);
 
-            let (lift, p_value) = if v.is_control {
-                (None, None)
+            let lift = if v.is_control {
+                None
             } else if let (Some((c_succ, c_n)), true) = (control_stats, exposures > 0) {
                 let p_c = if c_n > 0 { c_succ as f64 / c_n as f64 } else { 0.0 };
                 let p_t = converters as f64 / exposures as f64;
-                let lift = if p_c > 0.0 {
+                if p_c > 0.0 {
                     Some((p_t - p_c) / p_c)
                 } else {
                     None
-                };
-                let p_value = two_proportion_ztest(c_succ, c_n, converters, exposures);
-                (lift, p_value)
+                }
             } else {
-                (None, None)
+                None
             };
 
             VariantResult {
@@ -242,12 +217,8 @@ fn build_response(
                 is_control: v.is_control,
                 exposures,
                 converters,
-                total_conversions,
-                total_value,
                 conversion_rate,
-                ci95,
                 lift,
-                p_value,
             }
         })
         .collect();
@@ -264,10 +235,7 @@ fn build_response(
     ResultsResponse {
         experiment_id: row.experiment_id.clone(),
         experiment_key: row.key.clone(),
-        metric_name: resolved.metric_name,
-        window_start_ms: resolved.start_ms,
-        window_end_ms: resolved.end_ms,
-        granularity: resolved.granularity,
+        granularity,
         variants: variant_results,
         srm,
         time_series: series,
@@ -328,12 +296,9 @@ fn compute_srm(
         });
     }
 
-    let (chi_square, p_value) = srm_chi_square(&observed, &expected_fracs)?;
+    let (_chi_square, p_value) = srm_chi_square(&observed, &expected_fracs)?;
     Some(SrmResult {
-        chi_square,
-        p_value,
         warning: p_value < 0.001,
         expected: shares,
     })
 }
-

@@ -1,60 +1,57 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCcw } from 'lucide-react';
 import * as ExperimentsAPI from '@/api/experiments';
-import type { Granularity, ResultsResponse, VariantResult } from '@/api/types';
+import type { ResultsResponse, VariantResult } from '@/api/types';
 import { Button } from '@/components/Button';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { PageBody, PageHeader } from '@/components/PageHeader';
-import { SegmentedControl } from '@/components/SegmentedControl';
 import { Spinner } from '@/components/Spinner';
 import { StatusBadge } from '@/components/Badge';
-import { ConversionChart } from '@/components/results/ConversionChart';
-import {
-  DateRangePicker,
-  presetToRange,
-  type RangePreset,
-} from '@/components/results/DateRangePicker';
 import { SrmBanner } from '@/components/results/SrmBanner';
 import { TimeSeriesChart } from '@/components/results/TimeSeriesChart';
-import { VariantStatCard } from '@/components/results/VariantStatCard';
-import { Verdict, selectWinnerKey } from '@/components/results/Verdict';
+import { VariantsTable } from '@/components/results/VariantsTable';
 
-const GRANULARITY_OPTIONS = [
-  { value: 'day' as const, label: 'Day' },
-  { value: 'hour' as const, label: 'Hour' },
-];
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const NUM = new Intl.NumberFormat();
+
+function fmtDuration(ms: number): string {
+  if (ms <= 0) return '0h';
+  if (ms < DAY_MS) return `${Math.max(1, Math.round(ms / HOUR_MS))}h`;
+  const days = ms / DAY_MS;
+  if (days < 10) return `${days.toFixed(1)} days`;
+  return `${Math.round(days)} days`;
+}
 
 export function ExperimentResultsPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const [preset, setPreset] = useState<RangePreset>('all');
-  const [granularity, setGranularity] = useState<Granularity>('day');
 
-  // The detail query gives us experiment metadata to render alongside (key,
-  // status, variant order). We also need it as a fallback if /results errors.
   const detailQuery = useQuery({
     queryKey: ['experiment', id],
     queryFn: () => ExperimentsAPI.getExperiment(id),
     enabled: Boolean(id),
   });
 
-  const range = useMemo(() => presetToRange(preset), [preset]);
+  const detail = detailQuery.data;
+
+  // Drives the "Running" stat card. Computed client-side so a draft experiment
+  // shows 0h rather than "days since creation".
+  const durationMs = useMemo(() => {
+    if (!detail?.startedAt) return 0;
+    const end = detail.stoppedAt ?? Date.now();
+    return Math.max(0, end - detail.startedAt);
+  }, [detail]);
 
   const resultsQuery = useQuery<ResultsResponse>({
-    queryKey: ['experiment-results', id, preset, granularity],
-    queryFn: () =>
-      ExperimentsAPI.getExperimentResults(id, {
-        start: range.start,
-        end: range.end,
-        granularity,
-      }),
+    queryKey: ['experiment-results', id],
+    queryFn: () => ExperimentsAPI.getExperimentResults(id),
     enabled: Boolean(id),
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
 
-  const detail = detailQuery.data;
   const results = resultsQuery.data;
   const variantKeyOrder: readonly string[] = useMemo(
     () => detail?.variants.map((v) => v.key) ?? [],
@@ -62,7 +59,6 @@ export function ExperimentResultsPage() {
   );
   const sortedVariants: VariantResult[] = useMemo(() => {
     if (!results) return [];
-    // Mirror the chart's row order: control first, then variantKeyOrder.
     const order = new Map<string, number>();
     variantKeyOrder.forEach((k, i) => order.set(k, i));
     return [...results.variants].sort((a, b) => {
@@ -72,12 +68,11 @@ export function ExperimentResultsPage() {
     });
   }, [results, variantKeyOrder]);
 
-  const winner = useMemo(
-    () => (results ? selectWinnerKey(results) : null),
+  const totalExposures = useMemo(
+    () => (results ? results.variants.reduce((a, v) => a + v.exposures, 0) : 0),
     [results],
   );
 
-  // Initial load: nothing to render yet.
   if (detailQuery.isLoading) {
     return (
       <>
@@ -106,14 +101,7 @@ export function ExperimentResultsPage() {
     <>
       <PageHeader
         title={`${detail.key} · Results`}
-        description={
-          <span className="flex items-center gap-2">
-            <StatusBadge status={detail.status} />
-            <span className="font-mono text-sm text-slate-500">
-              {detail.experimentId}
-            </span>
-          </span>
-        }
+        description={<StatusBadge status={detail.status} />}
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -139,28 +127,6 @@ export function ExperimentResultsPage() {
 
       <PageBody>
         <div className="flex flex-col gap-6">
-          {/* Controls row */}
-          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Window
-              </span>
-              <DateRangePicker value={preset} onChange={setPreset} />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Granularity
-              </span>
-              <SegmentedControl<Granularity>
-                ariaLabel="Granularity"
-                options={GRANULARITY_OPTIONS}
-                value={granularity}
-                onChange={setGranularity}
-                size="sm"
-              />
-            </div>
-          </div>
-
           {resultsQuery.isError ? (
             <ErrorAlert
               error={resultsQuery.error}
@@ -170,39 +136,24 @@ export function ExperimentResultsPage() {
 
           {results ? (
             <>
-              <Verdict results={results} variantKeyOrder={variantKeyOrder} />
-              <SrmBanner srm={results.srm} variantKeyOrder={variantKeyOrder} />
-
-              {sortedVariants.length === 0 ||
-              sortedVariants.every((v) => v.exposures === 0) ? (
-                <EmptyResultsCard
-                  status={detail.status}
-                  hasStarted={detail.startedAt !== null}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <StatCard
+                  label="Total exposures"
+                  value={NUM.format(totalExposures)}
                 />
-              ) : (
-                <>
-                  <ConversionChart
-                    variants={sortedVariants}
-                    variantKeyOrder={variantKeyOrder}
-                  />
-                  <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                    {sortedVariants.map((v) => (
-                      <VariantStatCard
-                        key={v.variantKey}
-                        variant={v}
-                        variantKeyOrder={variantKeyOrder}
-                        isWinner={v.variantKey === winner}
-                      />
-                    ))}
-                  </div>
-                  <TimeSeriesChart
-                    buckets={results.timeSeries}
-                    variantKeyOrder={variantKeyOrder}
-                    granularity={results.granularity}
-                  />
-                  <FootnoteCard results={results} />
-                </>
-              )}
+                <StatCard label="Running" value={fmtDuration(durationMs)} />
+                <StatCard label="Primary metric" value={detail.primaryMetric} mono />
+              </div>
+              <SrmBanner srm={results.srm} variantKeyOrder={variantKeyOrder} />
+              <VariantsTable
+                variants={sortedVariants}
+                variantKeyOrder={variantKeyOrder}
+              />
+              <TimeSeriesChart
+                buckets={results.timeSeries}
+                variantKeyOrder={variantKeyOrder}
+                granularity={results.granularity}
+              />
             </>
           ) : resultsQuery.isLoading ? (
             <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -215,62 +166,30 @@ export function ExperimentResultsPage() {
   );
 }
 
-function EmptyResultsCard({
-  status,
-  hasStarted,
+function StatCard({
+  label,
+  value,
+  mono,
 }: {
-  status: string;
-  hasStarted: boolean;
+  label: string;
+  value: string;
+  mono?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-14 text-center">
-      <h3 className="text-lg font-semibold text-slate-900">
-        No exposures yet
-      </h3>
-      <p className="mx-auto mt-2 max-w-md text-base text-slate-500">
-        {!hasStarted
-          ? `This experiment is in '${status}' status. Start it and call /evaluate from your code to begin recording exposures.`
-          : 'Once your code calls POST /api/v1/experiments/evaluate for this experiment, results will appear here within a few seconds.'}
-      </p>
-    </div>
-  );
-}
-
-function FootnoteCard({ results }: { results: ResultsResponse }) {
-  const fmt = (ms: number) =>
-    new Date(ms).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-5 py-4 text-sm text-slate-600">
-      <div className="font-semibold text-slate-700">How these numbers are computed</div>
-      <ul className="mt-1.5 list-disc space-y-1 pl-5">
-        <li>
-          Window: <span className="tabular-nums">{fmt(results.windowStartMs)}</span>{' '}
-          → <span className="tabular-nums">{fmt(results.windowEndMs)}</span>
-        </li>
-        <li>
-          A conversion is attributed to a variant only if it happened{' '}
-          <em>after</em> the user's first exposure to that variant.
-        </li>
-        <li>
-          Confidence intervals are 95% Wilson score intervals; lift is computed
-          relative to the control variant.
-        </li>
-        <li>
-          Significance is a two-sided two-proportion z-test with a pooled
-          standard error.
-        </li>
-        <li>
-          P-values are <strong>not corrected</strong> for multiple comparisons.
-          With 3+ variants, the chance of seeing one "significant" arm by random
-          variation alone goes up. Interpret narrow wins cautiously.
-        </li>
-      </ul>
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div
+        className={
+          mono
+            ? 'mt-0.5 truncate font-mono text-base font-semibold text-slate-900'
+            : 'mt-0.5 truncate text-lg font-semibold tabular-nums text-slate-900'
+        }
+        title={value}
+      >
+        {value}
+      </div>
     </div>
   );
 }

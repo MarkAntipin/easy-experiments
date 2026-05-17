@@ -10,8 +10,6 @@ pub struct VariantAggregate {
     pub variant_key: String,
     pub exposures: u64,
     pub converters: u64,
-    pub total_conversions: u64,
-    pub total_value: f64,
 }
 
 /// Per-variant rollup of exposures attributed against post-exposure metric
@@ -38,11 +36,9 @@ pub fn variant_aggregates(
             GROUP BY entity_id, variant_key
         ),
         attributed AS (
-            SELECT
+            SELECT DISTINCT
                 e.variant_key,
-                e.entity_id,
-                COUNT(*)                            AS conversions,
-                SUM(COALESCE(m.metric_value, 1.0))  AS total_value
+                e.entity_id
             FROM exposed e
             JOIN metric_events m
               ON m.company_id  = ?
@@ -50,14 +46,11 @@ pub fn variant_aggregates(
              AND m.metric_name = ?
              AND m.ts_ms      >= e.first_seen_ms
              AND m.ts_ms      <= ?
-            GROUP BY e.variant_key, e.entity_id
         )
         SELECT
             exp.variant_key,
-            COUNT(DISTINCT exp.entity_id)        AS exposures,
-            COUNT(DISTINCT att.entity_id)        AS converters,
-            COALESCE(SUM(att.conversions), 0)    AS total_conversions,
-            COALESCE(SUM(att.total_value), 0.0)  AS total_value
+            COUNT(DISTINCT exp.entity_id) AS exposures,
+            COUNT(DISTINCT att.entity_id) AS converters
         FROM exposed exp
         LEFT JOIN attributed att
                ON att.variant_key = exp.variant_key
@@ -74,14 +67,10 @@ pub fn variant_aggregates(
                 let variant_key: String = row.get(0)?;
                 let exposures: i64 = row.get(1)?;
                 let converters: i64 = row.get(2)?;
-                let total_conversions: i64 = row.get(3)?;
-                let total_value: f64 = row.get(4)?;
                 Ok(VariantAggregate {
                     variant_key,
                     exposures: exposures.max(0) as u64,
                     converters: converters.max(0) as u64,
-                    total_conversions: total_conversions.max(0) as u64,
-                    total_value,
                 })
             },
         )
