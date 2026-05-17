@@ -37,6 +37,11 @@ pub struct TestApp {
     pub user: AuthenticatedUser,
     pub token: String,
     client: Client,
+    /// Writer session into the same DuckDB engine the read pool reads from.
+    /// Tests that exercise analytics need to INSERT exposure/metric rows
+    /// directly — the real write path goes through `MpscEventSink` +
+    /// `spawn_writer`, which the harness replaces with `NoopEventSink`.
+    duckdb_writer: std::sync::Mutex<duckdb::Connection>,
 }
 
 // Each `tests/*.rs` compiles `common` separately; helpers used by one binary
@@ -145,6 +150,58 @@ impl TestApp {
             .send()
             .await
             .expect("POST /admin/v1/experiments/{id}/stop")
+    }
+
+    pub async fn get_experiment_results(&self, id: &str) -> reqwest::Response {
+        self.client
+            .get(self.url(&format!("/admin/v1/experiments/{id}/results")))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .expect("GET /admin/v1/experiments/{id}/results")
+    }
+
+    pub fn seed_exposure(
+        &self,
+        company_id: &str,
+        experiment_id: &str,
+        variant_key: &str,
+        entity_id: &str,
+        ts_ms: i64,
+    ) {
+        let conn = self.duckdb_writer.lock().expect("duckdb writer poisoned");
+        conn.execute(
+            "INSERT INTO exposures (schema_version, ts_ms, company_id, experiment_id, variant_key, entity_id) \
+             VALUES (1, ?, ?, ?, ?, ?)",
+            duckdb::params![ts_ms, company_id, experiment_id, variant_key, entity_id],
+        )
+        .expect("insert exposure");
+    }
+
+    /// Insert a row into DuckDB `metric_events` directly. See `seed_exposure`.
+    pub fn seed_metric_event(
+        &self,
+        company_id: &str,
+        entity_id: &str,
+        metric_name: &str,
+        ts_ms: i64,
+    ) {
+        let conn = self.duckdb_writer.lock().expect("duckdb writer poisoned");
+        conn.execute(
+            "INSERT INTO metric_events (schema_version, ts_ms, company_id, entity_id, metric_name, metric_value) \
+             VALUES (1, ?, ?, ?, ?, NULL)",
+            duckdb::params![ts_ms, company_id, entity_id, metric_name],
+        )
+        .expect("insert metric event");
+    }
+
+    pub async fn set_experiment_started_at(&self, id: &str, started_at_ms: i64) {
+        sqlx::query("UPDATE experiments SET started_at = $1 WHERE experiment_id = $2")
+            .bind(started_at_ms)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .expect("update started_at");
     }
 
     pub async fn post_api_key(&self, body: &Value) -> reqwest::Response {
@@ -336,6 +393,9 @@ async fn spawn_app() -> TestApp {
     std::fs::create_dir_all(&duckdb_dir).expect("create duckdb dir");
     let duckdb_path = duckdb_dir.join("test.duckdb");
     let duckdb_root = open_and_bootstrap(&duckdb_path).expect("bootstrap duckdb schema");
+    let duckdb_writer = std::sync::Mutex::new(
+        duckdb_root.try_clone().expect("clone duckdb writer session"),
+    );
     let read_pool = Arc::new(DuckDBReadPool::new(duckdb_root, 2));
     let results_service = Arc::new(ResultsService::new(
         read_pool,
@@ -377,6 +437,7 @@ async fn spawn_app() -> TestApp {
         user,
         token,
         client: Client::new(),
+        duckdb_writer,
     }
 }
 

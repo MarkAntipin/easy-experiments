@@ -4,6 +4,7 @@ mod create;
 mod delete;
 mod get;
 mod list;
+mod results;
 mod start_stop;
 mod update;
 
