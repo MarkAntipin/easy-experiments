@@ -37,10 +37,6 @@ pub struct TestApp {
     pub user: AuthenticatedUser,
     pub token: String,
     client: Client,
-    /// Writer session into the same DuckDB engine the read pool reads from.
-    /// Tests that exercise analytics need to INSERT exposure/metric rows
-    /// directly — the real write path goes through `MpscEventSink` +
-    /// `spawn_writer`, which the harness replaces with `NoopEventSink`.
     duckdb_writer: std::sync::Mutex<duckdb::Connection>,
 }
 
