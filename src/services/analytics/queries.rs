@@ -62,7 +62,15 @@ pub fn variant_aggregates(
     let mut stmt = conn.prepare(sql).map_err(map_duckdb_err)?;
     let rows = stmt
         .query_map(
-            params![company_id, experiment_id, start_ms, end_ms, company_id, metric_name, end_ms],
+            params![
+                company_id,
+                experiment_id,
+                start_ms,
+                end_ms,
+                company_id,
+                metric_name,
+                end_ms
+            ],
             |row| {
                 let variant_key: String = row.get(0)?;
                 let exposures: i64 = row.get(1)?;
@@ -112,7 +120,14 @@ pub fn time_series(
     let mut stmt = conn.prepare(sql).map_err(map_duckdb_err)?;
     let rows = stmt
         .query_map(
-            params![bucket_ms, bucket_ms, company_id, experiment_id, start_ms, end_ms],
+            params![
+                bucket_ms,
+                bucket_ms,
+                company_id,
+                experiment_id,
+                start_ms,
+                end_ms
+            ],
             |row| {
                 let bucket_ms: i64 = row.get(0)?;
                 let variant_key: String = row.get(1)?;

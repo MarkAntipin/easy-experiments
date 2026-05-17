@@ -57,10 +57,7 @@ pub async fn invite(
     }
 }
 
-pub async fn list(
-    db: &ExperimentsDB,
-    company_id: &str,
-) -> Result<Vec<UserListItem>, CustomError> {
+pub async fn list(db: &ExperimentsDB, company_id: &str) -> Result<Vec<UserListItem>, CustomError> {
     let rows = db_list_company_users(db, company_id).await?;
     Ok(rows.into_iter().map(UserListItem::from).collect())
 }

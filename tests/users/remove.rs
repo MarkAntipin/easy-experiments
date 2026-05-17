@@ -31,12 +31,11 @@ async fn remove_user_pending_no_content() {
 
     // assert
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
-            .bind(&id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
+        .bind(&id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(count.0, 0);
 }
 
@@ -51,12 +50,11 @@ async fn remove_user_self_forbidden() {
 
     // assert
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
-            .bind(&app.user.user_id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
+        .bind(&app.user.user_id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(count.0, 1, "self row should survive a self-delete attempt");
 }
 
@@ -88,12 +86,11 @@ async fn remove_user_other_tenant_no_op() {
 
     // assert: idempotent 204, but the row must survive (scoped by company_id).
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
-            .bind(&id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
+        .bind(&id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(count.0, 1);
 }
 
@@ -134,13 +131,15 @@ async fn remove_user_as_member_forbidden() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
-            .bind(&target_id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
-    assert_eq!(count.0, 1, "target should survive a member's delete attempt");
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE user_id = $1")
+        .bind(&target_id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        count.0, 1,
+        "target should survive a member's delete attempt"
+    );
 }
 
 #[tokio::test]

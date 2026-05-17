@@ -22,7 +22,5 @@ pub async fn create_experiment(
         "experiment created",
     );
 
-    Ok(HttpResponse::Created().json(CreateExperimentResponse {
-        experiment_id: id,
-    }))
+    Ok(HttpResponse::Created().json(CreateExperimentResponse { experiment_id: id }))
 }

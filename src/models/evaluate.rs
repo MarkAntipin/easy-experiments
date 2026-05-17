@@ -20,19 +20,25 @@ pub struct EvaluateRequest {
 impl Validate for EvaluateRequest {
     fn validate(&self) -> Result<(), CustomError> {
         if self.experiment_key.is_empty() {
-            return Err(CustomError::ValidationError("Experiment key should not be empty".into()));
+            return Err(CustomError::ValidationError(
+                "Experiment key should not be empty".into(),
+            ));
         }
         if self.experiment_key.len() > MAX_KEY_LENGTH {
             return Err(CustomError::ValidationError(format!(
-                "Experiment key length should be less than {} bytes", MAX_KEY_LENGTH
+                "Experiment key length should be less than {} bytes",
+                MAX_KEY_LENGTH
             )));
         }
         if self.entity_id.is_empty() {
-            return Err(CustomError::ValidationError("Entity ID should not be empty".into()));
+            return Err(CustomError::ValidationError(
+                "Entity ID should not be empty".into(),
+            ));
         }
         if self.entity_id.len() > MAX_ENTITY_ID_LENGTH {
             return Err(CustomError::ValidationError(format!(
-                "Entity ID length should be less than {} bytes", MAX_ENTITY_ID_LENGTH
+                "Entity ID length should be less than {} bytes",
+                MAX_ENTITY_ID_LENGTH
             )));
         }
         // Constraints look up properties as `properties.get(name)`; that only
@@ -85,7 +91,9 @@ mod tests {
     fn evaluate_request_accepts_null_or_object_properties() {
         assert!(evaluate_request(json!(null)).validate().is_ok());
         assert!(evaluate_request(json!({})).validate().is_ok());
-        assert!(evaluate_request(json!({"country": "US", "tier": 1})).validate().is_ok());
+        assert!(evaluate_request(json!({"country": "US", "tier": 1}))
+            .validate()
+            .is_ok());
     }
 
     #[test]

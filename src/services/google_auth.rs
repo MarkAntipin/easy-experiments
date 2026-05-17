@@ -64,7 +64,9 @@ impl GoogleTokenVerifier {
             .map_err(|_| CustomError::UnauthorizedError("Invalid token header".into()))?;
 
         if header.alg != Algorithm::RS256 {
-            return Err(CustomError::UnauthorizedError("Unexpected token alg".into()));
+            return Err(CustomError::UnauthorizedError(
+                "Unexpected token alg".into(),
+            ));
         }
 
         let kid = header
@@ -160,9 +162,7 @@ mod tests {
         let mut rng = rsa::rand_core::OsRng;
         let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
         let pub_key = priv_key.to_public_key();
-        let pem_doc = priv_key
-            .to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
-            .unwrap();
+        let pem_doc = priv_key.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF).unwrap();
         let pem = pem_doc.as_bytes().to_vec();
         let n = URL_SAFE_NO_PAD.encode(pub_key.n().to_bytes_be());
         let e = URL_SAFE_NO_PAD.encode(pub_key.e().to_bytes_be());

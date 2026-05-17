@@ -69,7 +69,9 @@ async fn update_experiment_primary_metric_when_running_conflict() {
 #[tokio::test]
 async fn update_experiment_variants_when_running_conflict() {
     let app = TestApp::spawn().await;
-    let id = app.running_experiment(&valid_experiment_body("running_v")).await;
+    let id = app
+        .running_experiment(&valid_experiment_body("running_v"))
+        .await;
 
     let response = app
         .patch_experiment(

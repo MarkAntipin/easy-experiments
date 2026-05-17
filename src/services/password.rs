@@ -99,7 +99,9 @@ mod tests {
         let h2 = hash_invite_token("abc");
         assert_eq!(h1, h2);
         assert_eq!(h1.len(), 64);
-        assert!(h1.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(h1
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]

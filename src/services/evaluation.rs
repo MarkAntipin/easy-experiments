@@ -5,8 +5,8 @@ use serde_json::Value;
 
 use crate::errors::CustomError;
 use crate::models::{
-    CachedExperiment, Constraint, ConstraintOperator, Distribution, EvaluateRequest,
-    ExperimentsDB, ExposureEvent,
+    CachedExperiment, Constraint, ConstraintOperator, Distribution, EvaluateRequest, ExperimentsDB,
+    ExposureEvent,
 };
 use crate::repository::db_get_experiment_by_key;
 use crate::services::exposure::EventSink;
@@ -79,7 +79,10 @@ pub fn assign_variant(
             pick_variant(&segment.distributions, &experiment.experiment_id, entity_id)
         {
             let config = experiment.variant_configs.get(&variant_key).cloned();
-            return Some(VariantAssignment { variant_key, config });
+            return Some(VariantAssignment {
+                variant_key,
+                config,
+            });
         }
     }
 
@@ -188,7 +191,13 @@ fn hash_to_bucket(experiment_id: &str, entity_id: &str, salt: &str) -> u32 {
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
     let mut h = FNV_OFFSET;
-    for part in [experiment_id.as_bytes(), b":", entity_id.as_bytes(), b":", salt.as_bytes()] {
+    for part in [
+        experiment_id.as_bytes(),
+        b":",
+        entity_id.as_bytes(),
+        b":",
+        salt.as_bytes(),
+    ] {
         for &b in part {
             h ^= b as u64;
             h = h.wrapping_mul(FNV_PRIME);
@@ -258,8 +267,14 @@ mod tests {
     #[test]
     fn pick_variant_picks_proportionally_to_distribution() {
         let dists = vec![
-            Distribution { variant_key: "a".into(), percent: 30 },
-            Distribution { variant_key: "b".into(), percent: 70 },
+            Distribution {
+                variant_key: "a".into(),
+                percent: 30,
+            },
+            Distribution {
+                variant_key: "b".into(),
+                percent: 70,
+            },
         ];
         let mut a = 0;
         let mut b = 0;
@@ -330,10 +345,10 @@ mod tests {
         // serde_json's Number doesn't compare across variants, so the raw
         // PartialEq would say `30 != 30.0`. The constraint check must.
         let cases = [
-            (serde_json::json!({"age": 30}),    serde_json::json!(30.0)),
-            (serde_json::json!({"age": 30.0}),  serde_json::json!(30)),
-            (serde_json::json!({"age": 0}),     serde_json::json!(0.0)),
-            (serde_json::json!({"age": -1}),    serde_json::json!(-1.0)),
+            (serde_json::json!({"age": 30}), serde_json::json!(30.0)),
+            (serde_json::json!({"age": 30.0}), serde_json::json!(30)),
+            (serde_json::json!({"age": 0}), serde_json::json!(0.0)),
+            (serde_json::json!({"age": -1}), serde_json::json!(-1.0)),
         ];
         for (props, value) in cases {
             let cs = vec![Constraint {
@@ -341,7 +356,11 @@ mod tests {
                 operator: ConstraintOperator::Eq,
                 value,
             }];
-            assert!(matches_constraints(&props, &cs), "eq should match for {:?}", props);
+            assert!(
+                matches_constraints(&props, &cs),
+                "eq should match for {:?}",
+                props
+            );
         }
 
         // Different numbers still don't match.
@@ -418,7 +437,10 @@ mod tests {
         // Sanity: non-numeric paths still go through Value::eq.
         assert!(values_eq(&serde_json::json!("a"), &serde_json::json!("a")));
         assert!(!values_eq(&serde_json::json!("a"), &serde_json::json!("b")));
-        assert!(values_eq(&serde_json::json!(true), &serde_json::json!(true)));
+        assert!(values_eq(
+            &serde_json::json!(true),
+            &serde_json::json!(true)
+        ));
         assert!(!values_eq(&serde_json::json!(true), &serde_json::json!(1)));
     }
 }

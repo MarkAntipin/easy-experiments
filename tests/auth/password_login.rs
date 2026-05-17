@@ -48,9 +48,7 @@ async fn password_login_on_google_only_account_unauthorized() {
     // Trying to log in via password against that row must be rejected — and
     // with the same generic 401 the bad-password branch returns, not a hint.
     let app = TestApp::spawn().await;
-    let resp = app
-        .password_login("owner@acme.test", "anything")
-        .await;
+    let resp = app.password_login("owner@acme.test", "anything").await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 

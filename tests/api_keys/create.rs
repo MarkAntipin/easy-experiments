@@ -29,13 +29,12 @@ async fn create_api_key_valid_payload_ok() {
         .expect("keyPrefix in response");
     assert!(key.starts_with(prefix));
 
-    let row: (String, String, String) = sqlx::query_as(
-        "SELECT name, key_prefix, company_id FROM api_keys WHERE api_key_id = $1",
-    )
-    .bind(&api_key_id)
-    .fetch_one(&app.pool)
-    .await
-    .expect("api key persisted");
+    let row: (String, String, String) =
+        sqlx::query_as("SELECT name, key_prefix, company_id FROM api_keys WHERE api_key_id = $1")
+            .bind(&api_key_id)
+            .fetch_one(&app.pool)
+            .await
+            .expect("api key persisted");
     assert_eq!(row.0, "production");
     assert_eq!(row.1, prefix);
     assert_eq!(row.2, app.user.company_id);

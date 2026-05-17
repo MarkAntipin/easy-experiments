@@ -24,6 +24,10 @@ impl ExperimentsDB {
             .max_capacity(10_000)
             .time_to_live(Duration::from_secs(60))
             .build();
-        Self { pool, experiment_cache, api_key_cache }
+        Self {
+            pool,
+            experiment_cache,
+            api_key_cache,
+        }
     }
 }

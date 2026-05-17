@@ -16,8 +16,7 @@ use chrono::Utc;
 use crate::errors::CustomError;
 use crate::models::{AuthenticatedUser, CompanyRow, ExperimentsDB, UserRow};
 use crate::repository::{
-    db_find_user_by_email, db_find_user_by_invite_token_hash,
-    db_set_password_and_clear_invite,
+    db_find_user_by_email, db_find_user_by_invite_token_hash, db_set_password_and_clear_invite,
 };
 use crate::services::jwt::create_jwt;
 use crate::services::password::{
@@ -78,9 +77,9 @@ pub async fn accept_invite(
     // A row may exist but its expiry has passed. Treat it like a missing token
     // — same generic message, no leaking of whether the token existed at all.
     let now = Utc::now().timestamp_millis();
-    let expires_at = user.invite_token_expires_at.ok_or_else(|| {
-        CustomError::InternalError("invite row missing expiry".into())
-    })?;
+    let expires_at = user
+        .invite_token_expires_at
+        .ok_or_else(|| CustomError::InternalError("invite row missing expiry".into()))?;
     if expires_at <= now {
         return Err(CustomError::UnauthorizedError(
             "invite link is invalid or already used".into(),

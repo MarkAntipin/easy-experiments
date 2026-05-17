@@ -33,10 +33,7 @@ async fn get_results_other_tenant_not_found() {
     // act
     let response = app
         .raw_client()
-        .get(format!(
-            "{}/admin/v1/experiments/{id}/results",
-            app.addr()
-        ))
+        .get(format!("{}/admin/v1/experiments/{id}/results", app.addr()))
         .bearer_auth(other_token)
         .send()
         .await

@@ -31,13 +31,12 @@ pub async fn db_find_user_by_email(
     db: &ExperimentsDB,
     email: &str,
 ) -> Result<Option<(UserRow, CompanyRow)>, CustomError> {
-    let user: Option<UserRow> = sqlx::query_as(&format!(
-        "SELECT {USER_COLS} FROM users WHERE email = $1"
-    ))
-    .bind(email)
-    .fetch_optional(&db.pool)
-    .await
-    .map_err(CustomError::from)?;
+    let user: Option<UserRow> =
+        sqlx::query_as(&format!("SELECT {USER_COLS} FROM users WHERE email = $1"))
+            .bind(email)
+            .fetch_optional(&db.pool)
+            .await
+            .map_err(CustomError::from)?;
 
     match user {
         Some(u) => {
@@ -244,7 +243,6 @@ pub async fn db_create_pending_user(
     }))
 }
 
-
 pub async fn db_find_user_by_invite_token_hash(
     db: &ExperimentsDB,
     token_hash: &str,
@@ -404,14 +402,12 @@ pub async fn db_delete_user(
     user_id: &str,
     company_id: &str,
 ) -> Result<bool, CustomError> {
-    let rows = sqlx::query(
-        "DELETE FROM users WHERE user_id = $1 AND company_id = $2",
-    )
-    .bind(user_id)
-    .bind(company_id)
-    .execute(&db.pool)
-    .await
-    .map_err(CustomError::from)?;
+    let rows = sqlx::query("DELETE FROM users WHERE user_id = $1 AND company_id = $2")
+        .bind(user_id)
+        .bind(company_id)
+        .execute(&db.pool)
+        .await
+        .map_err(CustomError::from)?;
     Ok(rows.rows_affected() > 0)
 }
 
@@ -420,13 +416,12 @@ pub async fn db_fetch_user_role(
     user_id: &str,
     company_id: &str,
 ) -> Result<Option<UserRole>, CustomError> {
-    let row: Option<(UserRole,)> = sqlx::query_as(
-        "SELECT role FROM users WHERE user_id = $1 AND company_id = $2",
-    )
-    .bind(user_id)
-    .bind(company_id)
-    .fetch_optional(&db.pool)
-    .await
-    .map_err(CustomError::from)?;
+    let row: Option<(UserRole,)> =
+        sqlx::query_as("SELECT role FROM users WHERE user_id = $1 AND company_id = $2")
+            .bind(user_id)
+            .bind(company_id)
+            .fetch_optional(&db.pool)
+            .await
+            .map_err(CustomError::from)?;
     Ok(row.map(|(r,)| r))
 }

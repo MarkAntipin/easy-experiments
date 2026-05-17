@@ -15,8 +15,7 @@ pub async fn google_login(
     payload: web::Json<GoogleLoginRequest>,
 ) -> Result<HttpResponse, CustomError> {
     let request = payload.into_inner();
-    let result =
-        auth::google_login(&db, &google_verifier, &jwt_secret.0, &request.token).await?;
+    let result = auth::google_login(&db, &google_verifier, &jwt_secret.0, &request.token).await?;
 
     tracing::info!(
         user_id = %result.user.user_id,

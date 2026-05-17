@@ -64,7 +64,10 @@ async fn evaluate_malformed_api_key_unauthorized() {
 
     // act
     let response = app
-        .evaluate("not-an-eek-key", &json!({"experimentKey": "x", "entityId": "u1"}))
+        .evaluate(
+            "not-an-eek-key",
+            &json!({"experimentKey": "x", "entityId": "u1"}),
+        )
         .await;
 
     // assert

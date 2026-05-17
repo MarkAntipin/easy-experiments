@@ -59,10 +59,7 @@ pub async fn db_create_api_key(
     }
 }
 
-pub async fn db_count_api_keys(
-    db: &ExperimentsDB,
-    company_id: &str,
-) -> Result<i64, CustomError> {
+pub async fn db_count_api_keys(db: &ExperimentsDB, company_id: &str) -> Result<i64, CustomError> {
     sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE company_id = $1")
         .bind(company_id)
         .fetch_one(&db.pool)

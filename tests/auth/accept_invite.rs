@@ -25,14 +25,18 @@ async fn invite_response_contains_token_and_url() {
     // `POST /admin/v1/users` exposes the one-time invite token plus a
     // copy-paste link. UI relies on these fields existing.
     let app = TestApp::spawn().await;
-    let resp = app
-        .post_user(&json!({ "email": "alice@acme.test" }))
-        .await;
+    let resp = app.post_user(&json!({ "email": "alice@acme.test" })).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body: Value = resp.json().await.unwrap();
-    assert!(body["inviteToken"].as_str().is_some(), "inviteToken present");
+    assert!(
+        body["inviteToken"].as_str().is_some(),
+        "inviteToken present"
+    );
     assert!(body["inviteUrl"].as_str().is_some(), "inviteUrl present");
-    assert!(body["inviteExpiresAt"].as_i64().is_some(), "inviteExpiresAt present");
+    assert!(
+        body["inviteExpiresAt"].as_i64().is_some(),
+        "inviteExpiresAt present"
+    );
 }
 
 #[tokio::test]
@@ -100,13 +104,11 @@ async fn accept_invite_with_expired_token_unauthorized() {
     let token = invite_and_get_token(&app, "alice@acme.test").await;
 
     // Backdate the expiry directly so we don't have to wait 14 days.
-    sqlx::query(
-        "UPDATE users SET invite_token_expires_at = 1 WHERE email = $1",
-    )
-    .bind("alice@acme.test")
-    .execute(&app.pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE users SET invite_token_expires_at = 1 WHERE email = $1")
+        .bind("alice@acme.test")
+        .execute(&app.pool)
+        .await
+        .unwrap();
 
     let resp = app.accept_invite(&token, "doesnt-matter-yet-strong").await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);

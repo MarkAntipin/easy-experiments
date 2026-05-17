@@ -390,7 +390,9 @@ async fn spawn_app() -> TestApp {
     let duckdb_path = duckdb_dir.join("test.duckdb");
     let duckdb_root = open_and_bootstrap(&duckdb_path).expect("bootstrap duckdb schema");
     let duckdb_writer = std::sync::Mutex::new(
-        duckdb_root.try_clone().expect("clone duckdb writer session"),
+        duckdb_root
+            .try_clone()
+            .expect("clone duckdb writer session"),
     );
     let read_pool = Arc::new(DuckDBReadPool::new(duckdb_root, 2));
     let results_service = Arc::new(ResultsService::new(

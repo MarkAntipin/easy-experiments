@@ -36,10 +36,7 @@ async fn list_api_keys_multiple_ok() {
     let body: Value = response.json().await.unwrap();
     let items = body["items"].as_array().expect("items array");
     assert_eq!(items.len(), 2);
-    let names: Vec<&str> = items
-        .iter()
-        .map(|i| i["name"].as_str().unwrap())
-        .collect();
+    let names: Vec<&str> = items.iter().map(|i| i["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"first"));
     assert!(names.contains(&"second"));
     // Plaintext key is never returned by list — only by create.
