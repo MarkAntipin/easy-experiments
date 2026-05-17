@@ -1,8 +1,8 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use derive_more::Display;
-use sqlx;
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
+use sqlx;
 
 #[derive(Debug, Display, Clone)]
 pub enum CustomError {

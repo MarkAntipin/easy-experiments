@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use duckdb::{params, Connection};
@@ -186,11 +186,7 @@ pub fn spawn_sink_stats(sink: &Arc<dyn EventSink>, interval: Duration) {
     });
 }
 
-fn run_writer(
-    mut rx: mpsc::Receiver<ExposureEvent>,
-    conn: Connection,
-    config: WriterConfig,
-) {
+fn run_writer(mut rx: mpsc::Receiver<ExposureEvent>, conn: Connection, config: WriterConfig) {
     // `memory_limit` is a per-connection PRAGMA, so it has to live here
     // rather than at bootstrap time.
     if let Err(e) = conn.execute_batch("SET memory_limit='256MB'") {
@@ -228,9 +224,8 @@ fn run_writer(
         let timeout = config.flush_interval.saturating_sub(elapsed);
         let want = config.batch_capacity.saturating_sub(buf.len()).max(1);
 
-        let n = runtime.block_on(async {
-            tokio::time::timeout(timeout, rx.recv_many(&mut buf, want)).await
-        });
+        let n = runtime
+            .block_on(async { tokio::time::timeout(timeout, rx.recv_many(&mut buf, want)).await });
 
         match n {
             Ok(0) => {
@@ -392,7 +387,10 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(100);
         let sink = MpscEventSink::with_dedup_config(
             tx,
-            DedupConfig { max_capacity: 0, ttl: Duration::from_secs(60) },
+            DedupConfig {
+                max_capacity: 0,
+                ttl: Duration::from_secs(60),
+            },
         );
         sink.record_exposure(make_event("co1", "exp1", "user1"));
         sink.record_exposure(make_event("co1", "exp1", "user1"));

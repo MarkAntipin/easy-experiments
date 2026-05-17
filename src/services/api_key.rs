@@ -26,7 +26,11 @@ pub fn generate_api_key() -> GeneratedApiKey {
     let plaintext = format!("{}{}", API_KEY_PREFIX, URL_SAFE_NO_PAD.encode(buf));
     let hash = hash_api_key(&plaintext);
     let prefix = display_prefix(&plaintext);
-    GeneratedApiKey { plaintext, hash, prefix }
+    GeneratedApiKey {
+        plaintext,
+        hash,
+        prefix,
+    }
 }
 
 pub fn hash_api_key(plaintext: &str) -> String {
@@ -123,7 +127,9 @@ mod tests {
     fn hash_api_key_is_deterministic_sha256_hex() {
         let got = hash_api_key("eek-abc");
         assert_eq!(got.len(), 64);
-        assert!(got.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(got
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
         assert_eq!(hash_api_key("eek-abc"), got);
         assert_ne!(hash_api_key("eek-abc"), hash_api_key("eek-abd"));
         assert_eq!(hash_api_key("").len(), 64);

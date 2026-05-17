@@ -24,13 +24,12 @@ async fn invite_user_valid_email_ok() {
     assert_eq!(body["email"], "alice@acme.test");
     assert_eq!(body["status"], "pending");
 
-    let row: (String, String, Option<String>) = sqlx::query_as(
-        "SELECT email, company_id, google_sub FROM users WHERE user_id = $1",
-    )
-    .bind(&user_id)
-    .fetch_one(&app.pool)
-    .await
-    .expect("invited user persisted");
+    let row: (String, String, Option<String>) =
+        sqlx::query_as("SELECT email, company_id, google_sub FROM users WHERE user_id = $1")
+            .bind(&user_id)
+            .fetch_one(&app.pool)
+            .await
+            .expect("invited user persisted");
     assert_eq!(row.0, "alice@acme.test");
     assert_eq!(row.1, app.user.company_id);
     assert!(
@@ -129,9 +128,7 @@ async fn invite_user_owner_email_conflict() {
     // The seeded owner already exists under owner@acme.test; re-inviting
     // their email must 409, not silently overwrite or 500.
     let app = TestApp::spawn().await;
-    let response = app
-        .post_user(&json!({ "email": "owner@acme.test" }))
-        .await;
+    let response = app.post_user(&json!({ "email": "owner@acme.test" })).await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
@@ -164,11 +161,10 @@ async fn invite_user_as_member_forbidden() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE email = $1")
-            .bind("newbie@acme.test")
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE email = $1")
+        .bind("newbie@acme.test")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(count.0, 0, "no row should be created on forbidden invite");
 }

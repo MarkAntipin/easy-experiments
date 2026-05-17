@@ -52,8 +52,7 @@ pub(crate) fn validate_segments_compatible_for_running(
             "Cannot add or remove segments on a running experiment".into(),
         ));
     }
-    let old_by_priority: HashMap<i32, &Segment> =
-        old.iter().map(|s| (s.priority, s)).collect();
+    let old_by_priority: HashMap<i32, &Segment> = old.iter().map(|s| (s.priority, s)).collect();
 
     for new_seg in new {
         let old_seg = old_by_priority.get(&new_seg.priority).ok_or_else(|| {
@@ -98,7 +97,8 @@ fn validate_description(description: Option<&str>) -> Result<(), CustomError> {
         }
         if desc.len() > MAX_DESCRIPTION_LENGTH {
             return Err(CustomError::ValidationError(format!(
-                "Description length should be less than {} bytes", MAX_DESCRIPTION_LENGTH
+                "Description length should be less than {} bytes",
+                MAX_DESCRIPTION_LENGTH
             )));
         }
     }
@@ -107,11 +107,14 @@ fn validate_description(description: Option<&str>) -> Result<(), CustomError> {
 
 pub(super) fn validate_key(key: &str) -> Result<(), CustomError> {
     if key.is_empty() {
-        return Err(CustomError::ValidationError("Key should not be empty".into()));
+        return Err(CustomError::ValidationError(
+            "Key should not be empty".into(),
+        ));
     }
     if key.len() > MAX_KEY_LENGTH {
         return Err(CustomError::ValidationError(format!(
-            "Key length should be less than {} bytes", MAX_KEY_LENGTH
+            "Key length should be less than {} bytes",
+            MAX_KEY_LENGTH
         )));
     }
     validate_safe_identifier("Key", key)
@@ -119,11 +122,14 @@ pub(super) fn validate_key(key: &str) -> Result<(), CustomError> {
 
 fn validate_primary_metric(primary_metric: &str) -> Result<(), CustomError> {
     if primary_metric.is_empty() {
-        return Err(CustomError::ValidationError("Primary metric should not be empty".into()));
+        return Err(CustomError::ValidationError(
+            "Primary metric should not be empty".into(),
+        ));
     }
     if primary_metric.len() > MAX_PRIMARY_METRIC_LENGTH {
         return Err(CustomError::ValidationError(format!(
-            "Primary metric length should be less than {} bytes", MAX_PRIMARY_METRIC_LENGTH
+            "Primary metric length should be less than {} bytes",
+            MAX_PRIMARY_METRIC_LENGTH
         )));
     }
     validate_safe_identifier("Primary metric", primary_metric)
@@ -131,11 +137,14 @@ fn validate_primary_metric(primary_metric: &str) -> Result<(), CustomError> {
 
 fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
     if variants.is_empty() {
-        return Err(CustomError::ValidationError("Variants should not be empty".into()));
+        return Err(CustomError::ValidationError(
+            "Variants should not be empty".into(),
+        ));
     }
     if variants.len() > MAX_VARIANTS {
         return Err(CustomError::ValidationError(format!(
-            "Must have at most {} variants", MAX_VARIANTS
+            "Must have at most {} variants",
+            MAX_VARIANTS
         )));
     }
 
@@ -143,23 +152,25 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
     let mut control_count = 0;
     for variant in variants {
         if variant.key.is_empty() {
-            return Err(CustomError::ValidationError("Variant key should not be empty".into()));
+            return Err(CustomError::ValidationError(
+                "Variant key should not be empty".into(),
+            ));
         }
         if variant.key.len() > MAX_VARIANT_KEY_LENGTH {
             return Err(CustomError::ValidationError(format!(
-                "Variant key length should be less than {} bytes", MAX_VARIANT_KEY_LENGTH
+                "Variant key length should be less than {} bytes",
+                MAX_VARIANT_KEY_LENGTH
             )));
         }
         validate_safe_identifier("Variant key", &variant.key)?;
         if !seen.insert(variant.key.as_str()) {
             return Err(CustomError::ValidationError(format!(
-                "Duplicate variant key '{}'", variant.key
+                "Duplicate variant key '{}'",
+                variant.key
             )));
         }
         let config_bytes = serde_json::to_vec(&variant.config)
-            .map_err(|e| {
-                CustomError::InternalError(format!("Failed to serialize config: {}", e))
-            })?
+            .map_err(|e| CustomError::InternalError(format!("Failed to serialize config: {}", e)))?
             .len();
         if config_bytes > MAX_VARIANT_CONFIG_BYTES {
             return Err(CustomError::ValidationError(format!(
@@ -181,11 +192,14 @@ fn validate_variants(variants: &[Variant]) -> Result<(), CustomError> {
 
 fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), CustomError> {
     if segments.is_empty() {
-        return Err(CustomError::ValidationError("Must have at least one segment".into()));
+        return Err(CustomError::ValidationError(
+            "Must have at least one segment".into(),
+        ));
     }
     if segments.len() > MAX_SEGMENTS {
         return Err(CustomError::ValidationError(format!(
-            "Must have at most {} segments", MAX_SEGMENTS
+            "Must have at most {} segments",
+            MAX_SEGMENTS
         )));
     }
 
@@ -200,7 +214,8 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
         }
         if !seen_priorities.insert(segment.priority) {
             return Err(CustomError::ValidationError(format!(
-                "Duplicate segment priority '{}'", segment.priority
+                "Duplicate segment priority '{}'",
+                segment.priority
             )));
         }
         if segment.rollout_percent > 100 {
@@ -210,7 +225,8 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
         }
         if segment.constraints.len() > MAX_CONSTRAINTS_PER_SEGMENT {
             return Err(CustomError::ValidationError(format!(
-                "Segment must have at most {} constraints", MAX_CONSTRAINTS_PER_SEGMENT
+                "Segment must have at most {} constraints",
+                MAX_CONSTRAINTS_PER_SEGMENT
             )));
         }
         for constraint in &segment.constraints {
@@ -241,7 +257,8 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
         }
         if segment.distributions.len() > MAX_DISTRIBUTIONS_PER_SEGMENT {
             return Err(CustomError::ValidationError(format!(
-                "Segment must have at most {} distributions", MAX_DISTRIBUTIONS_PER_SEGMENT
+                "Segment must have at most {} distributions",
+                MAX_DISTRIBUTIONS_PER_SEGMENT
             )));
         }
         let mut total: u32 = 0;
@@ -254,12 +271,14 @@ fn validate_segments(segments: &[Segment], variants: &[Variant]) -> Result<(), C
             }
             if !variant_keys.contains(dist.variant_key.as_str()) {
                 return Err(CustomError::ValidationError(format!(
-                    "Distribution references unknown variant key '{}'", dist.variant_key
+                    "Distribution references unknown variant key '{}'",
+                    dist.variant_key
                 )));
             }
             if !seen_dist_keys.insert(dist.variant_key.as_str()) {
                 return Err(CustomError::ValidationError(format!(
-                    "Duplicate distribution for variant key '{}' in segment", dist.variant_key
+                    "Duplicate distribution for variant key '{}' in segment",
+                    dist.variant_key
                 )));
             }
             total = total.saturating_add(dist.percent);
@@ -322,8 +341,8 @@ fn validate_constraint_value_shape(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::domain::{Constraint, Distribution};
+    use super::*;
     use serde_json::json;
 
     fn assert_validation_err(result: Result<(), CustomError>, needle: &str) {
@@ -345,7 +364,10 @@ mod tests {
     }
 
     fn distribution(key: &str, percent: u32) -> Distribution {
-        Distribution { variant_key: key.into(), percent }
+        Distribution {
+            variant_key: key.into(),
+            percent,
+        }
     }
 
     fn simple_segment() -> Segment {
@@ -353,10 +375,7 @@ mod tests {
             priority: 0,
             rollout_percent: 100,
             constraints: vec![],
-            distributions: vec![
-                distribution("control", 50),
-                distribution("treatment", 50),
-            ],
+            distributions: vec![distribution("control", 50), distribution("treatment", 50)],
         }
     }
 
@@ -513,23 +532,35 @@ mod tests {
             constraints: vec![],
             distributions: vec![distribution("control", 50), distribution("control", 50)],
         };
-        assert_validation_err(validate_segments(&[seg], &variants), "Duplicate distribution");
+        assert_validation_err(
+            validate_segments(&[seg], &variants),
+            "Duplicate distribution",
+        );
     }
 
     #[test]
     fn validate_segments_rejects_duplicate_priorities() {
         let variants = simple_variants();
         let segs = vec![simple_segment(), simple_segment()]; // both priority 0
-        assert_validation_err(validate_segments(&segs, &variants), "Duplicate segment priority");
+        assert_validation_err(
+            validate_segments(&segs, &variants),
+            "Duplicate segment priority",
+        );
     }
 
     #[test]
     fn validate_segments_rejects_negative_priority_and_bad_rollout() {
         let variants = simple_variants();
-        let seg = Segment { priority: -1, ..simple_segment() };
+        let seg = Segment {
+            priority: -1,
+            ..simple_segment()
+        };
         assert_validation_err(validate_segments(&[seg], &variants), "non-negative");
 
-        let seg = Segment { rollout_percent: 101, ..simple_segment() };
+        let seg = Segment {
+            rollout_percent: 101,
+            ..simple_segment()
+        };
         assert_validation_err(validate_segments(&[seg], &variants), "between 0 and 100");
     }
 
@@ -558,7 +589,10 @@ mod tests {
             }],
             distributions: vec![distribution("control", 50), distribution("treatment", 50)],
         };
-        assert_validation_err(validate_segments(&[seg], &variants), "property must not be empty");
+        assert_validation_err(
+            validate_segments(&[seg], &variants),
+            "property must not be empty",
+        );
 
         let seg = Segment {
             priority: 0,
@@ -624,10 +658,7 @@ mod tests {
             priority,
             rollout_percent: rollout,
             constraints: vec![],
-            distributions: vec![
-                distribution("control", 50),
-                distribution("treatment", 50),
-            ],
+            distributions: vec![distribution("control", 50), distribution("treatment", 50)],
         }
     }
 

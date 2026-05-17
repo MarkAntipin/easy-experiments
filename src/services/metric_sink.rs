@@ -61,10 +61,7 @@ impl MpscMetricSink {
         Self::with_dedup_config(tx, MetricDedupConfig::default())
     }
 
-    pub fn with_dedup_config(
-        tx: mpsc::Sender<MetricEvent>,
-        config: MetricDedupConfig,
-    ) -> Self {
+    pub fn with_dedup_config(tx: mpsc::Sender<MetricEvent>, config: MetricDedupConfig) -> Self {
         let dedup_cache = SyncCache::builder()
             .max_capacity(config.max_capacity)
             .time_to_live(config.ttl)
@@ -175,9 +172,8 @@ fn run_metric_writer(
         let timeout = config.flush_interval.saturating_sub(elapsed);
         let want = config.batch_capacity.saturating_sub(buf.len()).max(1);
 
-        let n = runtime.block_on(async {
-            tokio::time::timeout(timeout, rx.recv_many(&mut buf, want)).await
-        });
+        let n = runtime
+            .block_on(async { tokio::time::timeout(timeout, rx.recv_many(&mut buf, want)).await });
 
         match n {
             Ok(0) => {

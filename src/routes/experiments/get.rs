@@ -24,8 +24,7 @@ pub async fn get_experiments(
     user: web::ReqData<AuthenticatedUser>,
     query: web::Query<GetExperimentsQueryParams>,
 ) -> Result<HttpResponse, CustomError> {
-    let rows =
-        experiment::list_experiments(&db, query.status.clone(), &user.company_id).await?;
+    let rows = experiment::list_experiments(&db, query.status.clone(), &user.company_id).await?;
     let items: Vec<ExperimentListItem> = rows.into_iter().map(Into::into).collect();
     Ok(HttpResponse::Ok().json(ExperimentListResponse { items }))
 }

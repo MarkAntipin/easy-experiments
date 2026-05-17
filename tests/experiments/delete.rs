@@ -22,12 +22,11 @@ async fn delete_experiment_draft_ok() {
         StatusCode::NOT_FOUND
     );
     // Row is still there, status = 'deleted'.
-    let row: (String,) =
-        sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
-            .bind(&id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let row: (String,) = sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
+        .bind(&id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(row.0, "deleted");
 }
 
@@ -85,12 +84,11 @@ async fn delete_experiment_stopped_ok() {
 
     // assert
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    let row: (String,) =
-        sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
-            .bind(&id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let row: (String,) = sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
+        .bind(&id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(row.0, "deleted");
 }
 
@@ -112,12 +110,11 @@ async fn delete_experiment_other_tenant_not_found() {
 
     // assert: 404, and the row is untouched (still 'draft', not 'deleted').
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    let row: (String,) =
-        sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
-            .bind(&id)
-            .fetch_one(&app.pool)
-            .await
-            .unwrap();
+    let row: (String,) = sqlx::query_as("SELECT status FROM experiments WHERE experiment_id = $1")
+        .bind(&id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
     assert_eq!(row.0, "draft");
 }
 

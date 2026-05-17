@@ -205,21 +205,18 @@ pub async fn db_get_experiment_by_key(
             // Bound the SQLite call so a wedged connection can't pin an actix
             // worker. Timeout maps to a 500 today; the loader error is shared
             // with any concurrent waiters via moka's single-flight.
-            let row: Option<ExperimentRow> = tokio::time::timeout(
-                EXPERIMENT_LOOKUP_TIMEOUT,
-                query,
-            )
-            .await
-            .map_err(|_| {
-                tracing::error!(
-                    timeout_ms = EXPERIMENT_LOOKUP_TIMEOUT.as_millis() as u64,
-                    experiment_key = %key_for_loader,
-                    company_id = %company_for_loader,
-                    "experiment lookup timed out",
-                );
-                CustomError::InternalError("experiment lookup timed out".to_string())
-            })?
-            .map_err(CustomError::from)?;
+            let row: Option<ExperimentRow> = tokio::time::timeout(EXPERIMENT_LOOKUP_TIMEOUT, query)
+                .await
+                .map_err(|_| {
+                    tracing::error!(
+                        timeout_ms = EXPERIMENT_LOOKUP_TIMEOUT.as_millis() as u64,
+                        experiment_key = %key_for_loader,
+                        company_id = %company_for_loader,
+                        "experiment lookup timed out",
+                    );
+                    CustomError::InternalError("experiment lookup timed out".to_string())
+                })?
+                .map_err(CustomError::from)?;
 
             match row {
                 None => Ok(None),
@@ -265,9 +262,8 @@ pub async fn db_get_experiments(
     company_id: &str,
 ) -> Result<Vec<ExperimentListRow>, CustomError> {
     match status {
-        Some(status_filter) => {
-            sqlx::query_as(
-                "
+        Some(status_filter) => sqlx::query_as(
+            "
                 SELECT
                     experiment_id,
                     key,
@@ -283,16 +279,14 @@ pub async fn db_get_experiments(
                   AND company_id = $2
                 ORDER BY updated_at DESC, experiment_id ASC
                 ",
-            )
-            .bind(status_filter.to_string())
-            .bind(company_id)
-            .fetch_all(&db.pool)
-            .await
-            .map_err(CustomError::from)
-        }
-        None => {
-            sqlx::query_as(
-                "
+        )
+        .bind(status_filter.to_string())
+        .bind(company_id)
+        .fetch_all(&db.pool)
+        .await
+        .map_err(CustomError::from),
+        None => sqlx::query_as(
+            "
                 SELECT
                     experiment_id,
                     key,
@@ -308,12 +302,11 @@ pub async fn db_get_experiments(
                   AND status != 'deleted'
                 ORDER BY updated_at DESC, experiment_id ASC
                 ",
-            )
-            .bind(company_id)
-            .fetch_all(&db.pool)
-            .await
-            .map_err(CustomError::from)
-        }
+        )
+        .bind(company_id)
+        .fetch_all(&db.pool)
+        .await
+        .map_err(CustomError::from),
     }
 }
 

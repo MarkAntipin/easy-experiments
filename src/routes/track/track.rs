@@ -3,9 +3,7 @@ use actix_web::HttpResponse;
 use chrono::Utc;
 
 use crate::errors::CustomError;
-use crate::models::{
-    AuthenticatedApiKey, MetricEvent, TrackRequest, TrackResponse,
-};
+use crate::models::{AuthenticatedApiKey, MetricEvent, TrackRequest, TrackResponse};
 use crate::services::metric_sink::{MetricSink, RecordOutcome};
 use crate::validation::ValidatedJson;
 

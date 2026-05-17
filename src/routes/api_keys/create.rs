@@ -2,9 +2,7 @@ use actix_web::web;
 use actix_web::HttpResponse;
 
 use crate::errors::CustomError;
-use crate::models::{
-    AuthenticatedUser, CreateApiKeyRequest, CreateApiKeyResponse, ExperimentsDB,
-};
+use crate::models::{AuthenticatedUser, CreateApiKeyRequest, CreateApiKeyResponse, ExperimentsDB};
 use crate::services::api_key;
 use crate::validation::ValidatedJson;
 

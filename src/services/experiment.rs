@@ -7,8 +7,8 @@ use crate::models::{
 use crate::repository::{
     db_create_experiment, db_delete_experiment, db_get_experiment_by_id, db_get_experiments,
     db_start_experiment, db_stop_experiment, db_update_experiment, CreateExperimentOutcome,
-    DeleteExperimentOutcome, StartExperimentOutcome, StopExperimentOutcome,
-    UpdateExperimentFields, UpdateExperimentOutcome,
+    DeleteExperimentOutcome, StartExperimentOutcome, StopExperimentOutcome, UpdateExperimentFields,
+    UpdateExperimentOutcome,
 };
 
 pub async fn create_experiment(
@@ -42,9 +42,7 @@ pub async fn get_experiment(
 ) -> Result<ExperimentRow, CustomError> {
     db_get_experiment_by_id(db, id, company_id)
         .await?
-        .ok_or_else(|| {
-            CustomError::NotFoundError(format!("Experiment with id '{}' not found", id))
-        })
+        .ok_or_else(|| CustomError::NotFoundError(format!("Experiment with id '{}' not found", id)))
 }
 
 pub async fn list_experiments(
@@ -77,12 +75,14 @@ pub async fn update_experiment(
         }
     }
 
-    let existing_variants: Vec<Variant> = serde_json::from_str(&existing.variants).map_err(|e| {
-        CustomError::InternalError(format!("Failed to parse stored variants: {}", e))
-    })?;
-    let existing_segments: Vec<Segment> = serde_json::from_str(&existing.segments).map_err(|e| {
-        CustomError::InternalError(format!("Failed to parse stored segments: {}", e))
-    })?;
+    let existing_variants: Vec<Variant> =
+        serde_json::from_str(&existing.variants).map_err(|e| {
+            CustomError::InternalError(format!("Failed to parse stored variants: {}", e))
+        })?;
+    let existing_segments: Vec<Segment> =
+        serde_json::from_str(&existing.segments).map_err(|e| {
+            CustomError::InternalError(format!("Failed to parse stored segments: {}", e))
+        })?;
 
     let description_change: Option<Option<String>> = match request.description {
         None => None,
@@ -92,7 +92,11 @@ pub async fn update_experiment(
                 (None, None) => true,
                 _ => false,
             };
-            if same { None } else { Some(new_desc) }
+            if same {
+                None
+            } else {
+                Some(new_desc)
+            }
         }
     };
 
@@ -159,12 +163,8 @@ pub async fn update_experiment(
     let effective_primary_metric: &str = primary_metric_change
         .as_deref()
         .unwrap_or(&existing.primary_metric);
-    let effective_variants: &[Variant] = variants_change
-        .as_deref()
-        .unwrap_or(&existing_variants);
-    let effective_segments: &[Segment] = segments_change
-        .as_deref()
-        .unwrap_or(&existing_segments);
+    let effective_variants: &[Variant] = variants_change.as_deref().unwrap_or(&existing_variants);
+    let effective_segments: &[Segment] = segments_change.as_deref().unwrap_or(&existing_segments);
 
     validate_experiment_state(
         effective_description,

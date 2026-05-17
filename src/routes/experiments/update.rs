@@ -2,9 +2,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use uuid::Uuid;
 
 use crate::errors::CustomError;
-use crate::models::{
-    AuthenticatedUser, ExperimentsDB, MessageResponse, UpdateExperimentRequest,
-};
+use crate::models::{AuthenticatedUser, ExperimentsDB, MessageResponse, UpdateExperimentRequest};
 use crate::services::experiment;
 use crate::validation::ValidatedJson;
 

@@ -135,9 +135,21 @@ async fn compute_results(
     let join_fut = tokio::task::spawn_blocking(move || -> Result<_, CustomError> {
         let conn = conn_guard.conn();
         let aggs = variant_aggregates(
-            conn, &company_id, &experiment_id, &metric_name, start_ms, end_ms,
+            conn,
+            &company_id,
+            &experiment_id,
+            &metric_name,
+            start_ms,
+            end_ms,
         )?;
-        let series = time_series(conn, &company_id, &experiment_id, start_ms, end_ms, granularity)?;
+        let series = time_series(
+            conn,
+            &company_id,
+            &experiment_id,
+            start_ms,
+            end_ms,
+            granularity,
+        )?;
         Ok((aggs, series))
     });
 
@@ -146,7 +158,9 @@ async fn compute_results(
         Ok(Ok(Err(e))) => return Err(e),
         Ok(Err(join_err)) => {
             tracing::error!(error = %join_err, "analytics: spawn_blocking join failed");
-            return Err(CustomError::InternalError("analytics query failed".to_string()));
+            return Err(CustomError::InternalError(
+                "analytics query failed".to_string(),
+            ));
         }
         Err(_) => {
             tracing::error!(
@@ -154,7 +168,9 @@ async fn compute_results(
                 timeout_ms = ANALYTICS_QUERY_TIMEOUT.as_millis() as u64,
                 "analytics: query timed out",
             );
-            return Err(CustomError::InternalError("analytics query timed out".to_string()));
+            return Err(CustomError::InternalError(
+                "analytics query timed out".to_string(),
+            ));
         }
     };
 
@@ -201,7 +217,11 @@ fn build_response(
             let lift = if v.is_control {
                 None
             } else if let (Some((c_succ, c_n)), true) = (control_stats, exposures > 0) {
-                let p_c = if c_n > 0 { c_succ as f64 / c_n as f64 } else { 0.0 };
+                let p_c = if c_n > 0 {
+                    c_succ as f64 / c_n as f64
+                } else {
+                    0.0
+                };
                 let p_t = converters as f64 / exposures as f64;
                 if p_c > 0.0 {
                     Some((p_t - p_c) / p_c)
