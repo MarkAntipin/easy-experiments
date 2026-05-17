@@ -175,6 +175,7 @@ pub async fn db_create_user_and_company(
     Ok((user, company))
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum CreatePendingUserOutcome {
     Created(UserRow),
     EmailExists,
