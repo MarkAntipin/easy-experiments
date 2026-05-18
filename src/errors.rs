@@ -1,10 +1,9 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use sqlx;
 
-#[derive(Debug, Display, Clone)]
+#[derive(Debug, Clone)]
 pub enum CustomError {
     SerializeError(String),
     ValidationError(String),
@@ -14,6 +13,12 @@ pub enum CustomError {
     NotFoundError(String),
     ConflictError(String),
     PreconditionFailedError(String),
+}
+
+impl std::fmt::Display for CustomError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message())
+    }
 }
 
 impl CustomError {

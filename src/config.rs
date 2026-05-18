@@ -1,9 +1,18 @@
-use config::{Config as RawConfig, Environment};
-use dotenv::dotenv;
-use serde::Deserialize;
 use std::path::PathBuf;
+use std::str::FromStr;
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
+pub struct ConfigError(String);
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "config error: {}", self.0)
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+#[derive(Debug)]
 pub struct Config {
     pub application_port: u16,
 
@@ -106,34 +115,58 @@ pub struct AuthProviders {
     pub password: bool,
 }
 
-pub fn get_config() -> Result<Config, config::ConfigError> {
-    dotenv().ok();
+fn env_opt(key: &str) -> Option<String> {
+    std::env::var(key).ok()
+}
 
-    RawConfig::builder()
-        .set_default("application_port", 18200)?
-        .set_default("admin_company_name", "Default")?
-        .set_default("invite_token_ttl_days", 7)?
-        .set_default("app_base_url", "")?
-        .set_default("sqlite_url", "sqlite://easy-experiments.db")?
-        .set_default("duckdb_path", "easy-experiments.duckdb")?
-        .set_default("event_queue_capacity", 10_000)?
-        .set_default("event_batch_capacity", 1_000)?
-        .set_default("event_flush_interval_ms", 1_000)?
-        .set_default("exposure_dedup_capacity", 1_000_000)?
-        .set_default("exposure_dedup_ttl_secs", 3_600)?
-        .set_default("metric_queue_capacity", 10_000)?
-        .set_default("metric_batch_capacity", 1_000)?
-        .set_default("metric_flush_interval_ms", 1_000)?
-        .set_default("metric_idempotency_capacity", 200_000)?
-        .set_default("metric_idempotency_ttl_secs", 600)?
-        .set_default("analytics_pool_size", 4)?
-        .set_default("analytics_cache_capacity", 1_000)?
-        .set_default("analytics_cache_ttl_secs", 30)?
-        .set_default(
-            "google_jwks_url",
+fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+fn env_parsed<T: FromStr>(key: &str, default: T) -> Result<T, ConfigError>
+where
+    T::Err: std::fmt::Display,
+{
+    match std::env::var(key) {
+        Ok(v) => v
+            .parse::<T>()
+            .map_err(|e| ConfigError(format!("{key}: {e}"))),
+        Err(_) => Ok(default),
+    }
+}
+
+pub fn get_config() -> Result<Config, ConfigError> {
+    dotenvy::dotenv().ok();
+
+    Ok(Config {
+        application_port: env_parsed("APPLICATION_PORT", 18200)?,
+        jwt_secret: env_opt("JWT_SECRET"),
+        google_client_id: env_opt("GOOGLE_CLIENT_ID"),
+        google_jwks_url: env_or(
+            "GOOGLE_JWKS_URL",
             crate::services::google_auth::DEFAULT_GOOGLE_JWKS_URL,
-        )?
-        .add_source(Environment::default().separator(""))
-        .build()?
-        .try_deserialize()
+        ),
+        admin_email: env_opt("ADMIN_EMAIL"),
+        admin_password: env_opt("ADMIN_PASSWORD"),
+        admin_company_name: env_or("ADMIN_COMPANY_NAME", "Default"),
+        invite_token_ttl_days: env_parsed("INVITE_TOKEN_TTL_DAYS", 7)?,
+        app_base_url: env_or("APP_BASE_URL", ""),
+        sqlite_url: env_or("SQLITE_URL", "sqlite://easy-experiments.db"),
+        duckdb_path: env_or("DUCKDB_PATH", "easy-experiments.duckdb"),
+        event_queue_capacity: env_parsed("EVENT_QUEUE_CAPACITY", 10_000)?,
+        event_batch_capacity: env_parsed("EVENT_BATCH_CAPACITY", 1_000)?,
+        event_flush_interval_ms: env_parsed("EVENT_FLUSH_INTERVAL_MS", 1_000)?,
+        exposure_dedup_capacity: env_parsed("EXPOSURE_DEDUP_CAPACITY", 1_000_000)?,
+        exposure_dedup_ttl_secs: env_parsed("EXPOSURE_DEDUP_TTL_SECS", 3_600)?,
+        metric_queue_capacity: env_parsed("METRIC_QUEUE_CAPACITY", 10_000)?,
+        metric_batch_capacity: env_parsed("METRIC_BATCH_CAPACITY", 1_000)?,
+        metric_flush_interval_ms: env_parsed("METRIC_FLUSH_INTERVAL_MS", 1_000)?,
+        metric_idempotency_capacity: env_parsed("METRIC_IDEMPOTENCY_CAPACITY", 200_000)?,
+        metric_idempotency_ttl_secs: env_parsed("METRIC_IDEMPOTENCY_TTL_SECS", 600)?,
+        analytics_pool_size: env_parsed("ANALYTICS_POOL_SIZE", 4)?,
+        analytics_cache_capacity: env_parsed("ANALYTICS_CACHE_CAPACITY", 1_000)?,
+        analytics_cache_ttl_secs: env_parsed("ANALYTICS_CACHE_TTL_SECS", 30)?,
+        cors_allowed_origins: env_opt("CORS_ALLOWED_ORIGINS"),
+        ui_dist_path: env_opt("UI_DIST_PATH"),
+    })
 }
