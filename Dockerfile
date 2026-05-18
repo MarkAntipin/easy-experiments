@@ -1,5 +1,7 @@
 ARG RUST_VERSION=1.95
 ARG NODE_VERSION=20
+ARG CARGO_CHEF_VERSION=0.1.77
+ARG CARGO_BUILD_JOBS=2
 
 # ---------- UI build ----------
 FROM node:${NODE_VERSION}-alpine AS ui-builder
@@ -7,34 +9,58 @@ FROM node:${NODE_VERSION}-alpine AS ui-builder
 WORKDIR /ui
 
 COPY ui/package.json ui/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,id=easy-experiments-npm,target=/root/.npm \
+    npm ci
 
 COPY ui/ ./
 
 RUN npm run build
 
-# ---------- Backend build ----------
-FROM rust:${RUST_VERSION}-bookworm AS builder
+# ---------- Backend dependency planning ----------
+FROM rust:${RUST_VERSION}-bookworm AS backend-chef
+
+ARG CARGO_CHEF_VERSION
+ARG CARGO_BUILD_JOBS
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 
 WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         pkg-config \
-        libsqlite3-dev \
         cmake \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-chef --version "${CARGO_CHEF_VERSION}" --locked
+
+FROM backend-chef AS backend-planner
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ---------- Backend build ----------
+FROM backend-chef AS builder
+
+COPY --from=backend-planner /usr/src/app/recipe.json recipe.json
+
+RUN --mount=type=cache,id=easy-experiments-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=easy-experiments-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=easy-experiments-target,target=/usr/src/app/target,sharing=private \
+    cargo chef cook --release --recipe-path recipe.json
 
 COPY Cargo.toml Cargo.lock ./
 COPY migrations ./migrations
 COPY src ./src
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/usr/src/app/target,sharing=locked \
+RUN --mount=type=cache,id=easy-experiments-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=easy-experiments-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=easy-experiments-target,target=/usr/src/app/target,sharing=private \
     cargo build --release && \
-    cp target/release/easy-experiments /usr/local/bin/easy-experiments && \
-    mkdir -p /rootfs/data
+    cp target/release/easy-experiments /usr/local/bin/easy-experiments
+
+RUN mkdir -p /rootfs/data
 
 # ---------- Runtime ----------
 FROM debian:bookworm-slim AS runtime
@@ -59,8 +85,6 @@ ENV APPLICATION_PORT=18200 \
     RUST_LOG="info,sqlx=warn,h2=warn,hyper=warn,reqwest=warn"
 
 EXPOSE 18200
-
-VOLUME ["/data"]
 
 USER 65532:65532
 
