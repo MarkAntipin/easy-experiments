@@ -3,6 +3,7 @@ name = "easy-experiments"
 version = "0.1.0"
 authors = ["Mark Antipin <mr.antipin@gmail.com>"]
 edition = "2021"
+license = "MIT"
 
 [lib]
 path = "src/lib.rs"
