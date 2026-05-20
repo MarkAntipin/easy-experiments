@@ -1,0 +1,21 @@
+---
+import { siteConfig } from '../config';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="relative">
+  <div
+    class="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 text-xs text-ink-400 sm:flex-row sm:gap-0 sm:px-6 sm:pb-8 sm:pt-0"
+  >
+    <span>© {year} {siteConfig.name}</span>
+    <a
+      href={siteConfig.githubUrl}
+      target="_blank"
+      rel="noopener"
+      class="transition hover:text-ink-700"
+    >
+      Source on GitHub
+    </a>
+  </div>
+</footer>

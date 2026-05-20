@@ -1,0 +1,117 @@
+---
+import '../styles/global.css';
+import { siteConfig } from '../config';
+
+interface Props {
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+}
+
+const {
+  title = `${siteConfig.tagline} | ${siteConfig.name}`,
+  description = siteConfig.description,
+  noindex = false,
+} = Astro.props;
+
+const keywords = [
+  'self-hosted A/B testing',
+  'open source A/B testing',
+  'self-hosted feature flags',
+  'open source feature flags',
+  'LaunchDarkly alternative',
+  'Amplitude alternative',
+  'Optimizely alternative',
+  'feature flag service',
+  'A/B testing for startups',
+  'self-hosted experimentation platform',
+  'Docker A/B testing',
+  'cheap A/B testing tool',
+].join(', ');
+
+const canonicalUrl = new URL(Astro.url.pathname, siteConfig.siteUrl).toString();
+const ogImage = new URL(siteConfig.ogImagePath, siteConfig.siteUrl).toString();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: siteConfig.name,
+  alternateName: 'easy-experiments',
+  description: siteConfig.description,
+  applicationCategory: 'DeveloperApplication',
+  applicationSubCategory: 'A/B Testing & Feature Flags',
+  operatingSystem: 'Linux, Docker, Cross-platform',
+  url: siteConfig.siteUrl,
+  image: ogImage,
+  codeRepository: siteConfig.githubUrl,
+  keywords,
+  isAccessibleForFree: true,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  author: {
+    '@type': 'Person',
+    name: siteConfig.author.name,
+    url: siteConfig.author.url,
+  },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="keywords" content={keywords} />
+    <meta name="author" content={siteConfig.author.name} />
+    {noindex ? <meta name="robots" content="noindex,nofollow" /> : <meta name="robots" content="index,follow,max-image-preview:large" />}
+
+    <link rel="canonical" href={canonicalUrl} />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="256x256" href="/logo-mark-256.png" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d122e" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-title" content={siteConfig.name} />
+    <meta name="application-name" content={siteConfig.name} />
+    <meta name="format-detection" content="telephone=no" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteConfig.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${siteConfig.name} — ${siteConfig.tagline}`} />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={`${siteConfig.name} — ${siteConfig.tagline}`} />
+
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
+
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(jsonLd)}
+    />
+  </head>
+  <body
+    class="min-h-dvh overflow-x-hidden bg-white text-ink-800 antialiased"
+  >
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a4eff"/>
+      <stop offset="100%" stop-color="#6e26d9"/>
+    </linearGradient>
+    <clipPath id="flask-inner">
+      <path d="M12.5 5 H19.5 V11.2 L26 25.4 A1.4 1.4 0 0 1 24.7 27.4 H7.3 A1.4 1.4 0 0 1 6 25.4 L12.5 11.2 Z"/>
+    </clipPath>
+  </defs>
+  <path
+    d="M11.5 4 H20.5 A0.5 0.5 0 0 1 21 4.5 V5.5 A0.5 0.5 0 0 1 20.5 6 H20 V11 L26.6 25.4 A1.6 1.6 0 0 1 25.2 27.8 H6.8 A1.6 1.6 0 0 1 5.4 25.4 L12 11 V6 H11.5 A0.5 0.5 0 0 1 11 5.5 V4.5 A0.5 0.5 0 0 1 11.5 4 Z"
+    fill="white"/>
+  <rect x="0" y="15" width="32" height="14" fill="url(#liquid)" clip-path="url(#flask-inner)"/>
+  <circle cx="17.5" cy="12" r="0.9" fill="#2a4eff" clip-path="url(#flask-inner)"/>
+  <circle cx="15" cy="14" r="0.7" fill="#2a4eff" clip-path="url(#flask-inner)"/>
+  <path
+    d="M11.5 4 H20.5 A0.5 0.5 0 0 1 21 4.5 V5.5 A0.5 0.5 0 0 1 20.5 6 H20 V11 L26.6 25.4 A1.6 1.6 0 0 1 25.2 27.8 H6.8 A1.6 1.6 0 0 1 5.4 25.4 L12 11 V6 H11.5 A0.5 0.5 0 0 1 11 5.5 V4.5 A0.5 0.5 0 0 1 11.5 4 Z"
+    fill="none"
+    stroke="#0d122e"
+    stroke-width="1.6"
+    stroke-linejoin="round"/>
+</svg>
