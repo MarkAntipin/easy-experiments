@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://easy-experiments.com/sitemap-index.xml
+Sitemap: https://easy-experiments.dev/sitemap-index.xml

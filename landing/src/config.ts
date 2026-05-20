@@ -5,8 +5,8 @@ export const siteConfig = {
   description:
     'Open source, self-hosted A/B testing and feature flags. A lightweight LaunchDarkly, Amplitude, and Optimizely alternative that runs on a $5 VPS in a single Docker container.',
   // Keep in sync with `site` in astro.config.mjs.
-  siteUrl: 'https://easy-experiments.com',
-  adminUrl: 'https://app.easy-experiments.com',
+  siteUrl: 'https://easy-experiments.dev',
+  adminUrl: 'https://app.easy-experiments.dev',
   githubUrl: 'https://github.com/MarkAntipin/easy-experiments',
   docsUrl: 'https://github.com/MarkAntipin/easy-experiments#readme',
   contactEmail: 'mark@luzia.com',
