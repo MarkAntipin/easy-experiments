@@ -1,0 +1,72 @@
+name: easy-experiments
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - landing_dist:/srv/landing:ro
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    depends_on:
+      backend:
+        condition: service_started
+      landing:
+        condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    image: ${IMAGE:-markantipin/easy-experiments}:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - app_data:/data
+    expose:
+      - "18200"
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    sysctls:
+      net.core.somaxconn: 4096
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  landing:
+    build:
+      context: ./landing
+    image: easy-experiments-landing:local
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        rm -rf /out/*
+        cp -a /landing-dist/. /out/
+        echo "landing published: $$(ls /out | wc -l) entries"
+    user: "0:0"
+    volumes:
+      - landing_dist:/out
+    restart: "no"
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:
+  landing_dist:
