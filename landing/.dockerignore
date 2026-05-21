@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.astro/
+
+# VCS / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+
+# OS / temp
+*.log
+*.tmp
+*.DS_Store
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Secrets
+.env
+.env.*
