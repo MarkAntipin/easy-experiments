@@ -33,6 +33,9 @@ easy-experiments.dev, www.easy-experiments.dev {
 app.easy-experiments.dev {
 	encode zstd gzip
 
+	@blocked path /.env* /.git* /.ht* /.vscode* /.ssh* /.aws* /.config*
+	respond @blocked 404
+
 	reverse_proxy backend:18200 {
 		header_up X-Real-IP {remote_host}
 	}

@@ -29,7 +29,7 @@ services:
         max-file: "3"
 
   backend:
-    image: ${IMAGE:-markantipin/easy-experiments}:${TAG:-latest}
+    image: markantipin12/easy-experiments:latest
     restart: unless-stopped
     env_file:
       - .env
