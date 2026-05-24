@@ -1,105 +1,267 @@
 import http from 'k6/http';
 import { check } from 'k6';
-import { randomItem, randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
+import exec from 'k6/execution';
 
-const API_KEY = __ENV.API_KEY;
-const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18200';
-const EXPERIMENT_KEYS = (__ENV.EXPERIMENT_KEYS || '').split(',').filter(Boolean);
+const BASE_URL = envString('BASE_URL', 'https://app.easy-experiments.dev').replace(/\/+$/, '');
+const API_KEY = envString('API_KEY');
+const EXPERIMENT_KEY = envString('EXPERIMENT_KEY', 'k6-load-test');
+const PROFILE = envString('PROFILE', 'smoke').toLowerCase();
 
-if (!API_KEY) throw new Error('API_KEY env var is required (run cargo run --release --bin seed_loadtest first)');
-if (EXPERIMENT_KEYS.length === 0) throw new Error('EXPERIMENT_KEYS env var is required');
+const EVALUATE_WEIGHT = envNumber('EVALUATE_WEIGHT', 85);
+const TRACK_BATCH_SIZE = envInt('TRACK_BATCH_SIZE', 10);
+const USER_POOL_SIZE = envInt('USER_POOL_SIZE', 100000);
+const UNIQUE_ENTITY_RATE = envNumber('UNIQUE_ENTITY_RATE', 0.2);
+const TRACK_IDEMPOTENCY = envBool('TRACK_IDEMPOTENCY', true);
+const METRIC_NOISE_RATE = envNumber('METRIC_NOISE_RATE', 0.1);
 
-const USER_POOL_SIZE = 10000;
-const COUNTRIES = ['US', 'DE', 'FR', 'GB', 'JP', 'BR', 'IN', 'AU', 'CA', 'MX'];
-const TIERS = [1, 2, 3];
-const METRICS = ['conversion_rate', 'click_through', 'activation_rate', 'engagement'];
+const COUNTRIES = ['US', 'GB', 'DE', 'FR', 'ES'];
+const PLANS = ['pro', 'business'];
+const DEVICES = ['desktop', 'mobile', 'tablet'];
+const METRICS = ['conversion_rate', 'checkout_started', 'checkout_completed'];
 
-// Per-variant conversion probability — treatment wins by ~2.4x.
-const CONVERSION_RATE = {
-  control: 0.05,
-  treatment: 0.12,
-};
-
-export const options = {
-  discardResponseBodies: true,
-  scenarios: {
-    evaluate: {
-      executor: 'constant-arrival-rate',
-      rate: 5000,
-      timeUnit: '1s',
-      duration: '1h',
-      preAllocatedVUs: 300,
-      maxVUs: 1500,
-      exec: 'evaluate',
-    },
-    funnel: {
-      executor: 'constant-arrival-rate',
-      rate: 200,
-      timeUnit: '1s',
-      duration: '1h',
-      preAllocatedVUs: 40,
-      maxVUs: 200,
-      exec: 'funnel',
-    },
-  },
-  thresholds: {
-    'http_req_failed': ['rate<0.001'],
-    'http_req_duration{scenario:evaluate}': ['p(95)<50', 'p(99)<150'],
-    'http_req_duration{scenario:funnel}': ['p(95)<100', 'p(99)<250'],
-  },
-};
-
-const headers = {
+const HEADERS = {
   'Content-Type': 'application/json',
   'X-Api-Key': API_KEY,
 };
 
-function entityId() {
-  return `user-${randomIntBetween(1, USER_POOL_SIZE)}`;
-}
+export const options = buildOptions(PROFILE);
 
-export function evaluate() {
-  const body = JSON.stringify({
-    experimentKey: randomItem(EXPERIMENT_KEYS),
-    entityId: entityId(),
-    properties: {
-      country: randomItem(COUNTRIES),
-      tier: randomItem(TIERS),
-    },
+export function setup() {
+  if (!API_KEY) {
+    throw new Error('API_KEY is required. Use: API_KEY=... PROFILE=smoke k6 run loadtest/script.js');
+  }
+
+  const health = http.get(`${BASE_URL}/health`, {
+    tags: { endpoint: 'health' },
   });
-  const res = http.post(`${BASE_URL}/api/v1/experiments/evaluate`, body, { headers });
-  check(res, { 'evaluate 200': (r) => r.status === 200 });
-}
+  if (health.status !== 200) {
+    throw new Error(`Health check failed: GET ${BASE_URL}/health returned ${health.status}`);
+  }
 
-export function funnel() {
-  const eid = entityId();
-  const expKey = randomItem(EXPERIMENT_KEYS);
-  const evalRes = http.post(
+  const res = http.post(
     `${BASE_URL}/api/v1/experiments/evaluate`,
     JSON.stringify({
-      experimentKey: expKey,
-      entityId: eid,
-      properties: { country: randomItem(COUNTRIES), tier: randomItem(TIERS) },
+      experimentKey: EXPERIMENT_KEY,
+      entityId: 'k6-setup-user',
+      properties: matchingProperties(0),
     }),
-    { headers, responseType: 'text' },
+    {
+      headers: HEADERS,
+      responseType: 'text',
+      tags: { endpoint: 'evaluate', phase: 'setup' },
+    },
   );
-  if (!check(evalRes, { 'evaluate 200': (r) => r.status === 200 })) return;
 
-  const variant = evalRes.json('variantKey');
-  if (!variant) return;
-
-  const convRate = CONVERSION_RATE[variant] ?? 0;
-  if (Math.random() >= convRate) return;
-
-  const n = randomIntBetween(1, 5);
-  const events = [];
-  for (let i = 0; i < n; i++) {
-    events.push({
-      entityId: eid,
-      metricName: randomItem(METRICS),
-      value: 1.0,
-    });
+  if (res.status !== 200) {
+    throw new Error(`Setup evaluate failed with status ${res.status}. Check API_KEY and BASE_URL.`);
   }
-  const trackRes = http.post(`${BASE_URL}/api/v1/track`, JSON.stringify({ events }), { headers });
-  check(trackRes, { 'track 200': (r) => r.status === 200 });
+
+  const body = safeJson(res);
+  if (!body || body.variantKey === null || body.variantKey === undefined) {
+    throw new Error(
+      `Setup evaluate returned no variant for experiment "${EXPERIMENT_KEY}". ` +
+        'Start the experiment and verify the k6 properties match its constraints.',
+    );
+  }
+
+  return { experimentKey: EXPERIMENT_KEY };
+}
+
+export default function (data) {
+  const iteration = exec.scenario.iterationInTest;
+  const entityId = pickEntityId(iteration);
+
+  if (Math.random() * 100 < EVALUATE_WEIGHT) {
+    evaluate(data.experimentKey, entityId, iteration);
+  } else {
+    track(entityId, iteration);
+  }
+}
+
+function evaluate(experimentKey, entityId, iteration) {
+  const res = http.post(
+    `${BASE_URL}/api/v1/experiments/evaluate`,
+    JSON.stringify({
+      experimentKey,
+      entityId,
+      properties: matchingProperties(iteration),
+    }),
+    {
+      headers: HEADERS,
+      tags: { endpoint: 'evaluate' },
+    },
+  );
+
+  check(res, {
+    'evaluate 200': (r) => r.status === 200,
+  }, { endpoint: 'evaluate' });
+}
+
+function track(entityId, iteration) {
+  const events = [];
+  for (let i = 0; i < TRACK_BATCH_SIZE; i += 1) {
+    const metricName = Math.random() < METRIC_NOISE_RATE ? pick(METRICS) : 'conversion_rate';
+    const event = {
+      entityId: i === 0 ? entityId : stableEntityId(iteration + i),
+      metricName,
+      value: 1,
+    };
+    if (TRACK_IDEMPOTENCY) {
+      event.idempotencyKey = `k6-${exec.scenario.name}-${exec.vu.idInTest}-${iteration}-${i}`;
+    }
+    events.push(event);
+  }
+
+  const res = http.post(
+    `${BASE_URL}/api/v1/track`,
+    JSON.stringify({ events }),
+    {
+      headers: HEADERS,
+      tags: { endpoint: 'track' },
+    },
+  );
+
+  check(res, {
+    'track 200': (r) => r.status === 200,
+  }, { endpoint: 'track' });
+}
+
+function matchingProperties(iteration) {
+  return {
+    country: COUNTRIES[iteration % COUNTRIES.length],
+    plan: PLANS[iteration % PLANS.length],
+    loggedIn: true,
+    age: 18 + (iteration % 48),
+    device: DEVICES[iteration % DEVICES.length],
+  };
+}
+
+function pickEntityId(iteration) {
+  if (Math.random() < UNIQUE_ENTITY_RATE) {
+    return `k6-unique-${Date.now()}-${exec.vu.idInTest}-${iteration}`;
+  }
+  return stableEntityId(iteration);
+}
+
+function stableEntityId(iteration) {
+  return `user-${iteration % USER_POOL_SIZE}`;
+}
+
+function pick(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function safeJson(res) {
+  try {
+    return res.json();
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildOptions(profile) {
+  const scenario = scenarioFor(profile);
+  return {
+    discardResponseBodies: true,
+    scenarios: {
+      mixed_data_plane: {
+        executor: 'ramping-arrival-rate',
+        timeUnit: '1s',
+        exec: 'default',
+        ...scenario,
+      },
+    },
+    thresholds: {
+      http_req_failed: [`rate<${envNumber('MAX_ERROR_RATE', profile === 'stress' ? 0.05 : 0.001)}`],
+      'http_req_duration{endpoint:evaluate}': [
+        `p(95)<${envInt('EVALUATE_P95_MS', 150)}`,
+        `p(99)<${envInt('EVALUATE_P99_MS', 500)}`,
+      ],
+      'http_req_duration{endpoint:track}': [
+        `p(95)<${envInt('TRACK_P95_MS', 250)}`,
+        `p(99)<${envInt('TRACK_P99_MS', 750)}`,
+      ],
+    },
+  };
+}
+
+function scenarioFor(profile) {
+  switch (profile) {
+    case 'smoke':
+      return {
+        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 20),
+        maxVUs: envInt('MAX_VUS', 100),
+        stages: [
+          { duration: '30s', target: 5 },
+          { duration: '2m', target: 10 },
+          { duration: '30s', target: 0 },
+        ],
+      };
+    case 'proof':
+      return {
+        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 300),
+        maxVUs: envInt('MAX_VUS', 2000),
+        stages: [
+          { duration: '2m', target: 10 },
+          { duration: '5m', target: 500 },
+          { duration: '30m', target: 500 },
+          { duration: '2m', target: 0 },
+        ],
+      };
+    case 'spike':
+      return {
+        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 500),
+        maxVUs: envInt('MAX_VUS', 2500),
+        stages: [
+          { duration: '2m', target: 50 },
+          { duration: '5m', target: 500 },
+          { duration: '2m', target: 1500 },
+          { duration: '5m', target: 500 },
+          { duration: '2m', target: 0 },
+        ],
+      };
+    case 'stress':
+      return {
+        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 800),
+        maxVUs: envInt('MAX_VUS', 4000),
+        stages: [
+          { duration: '3m', target: 250 },
+          { duration: '5m', target: 500 },
+          { duration: '5m', target: 1000 },
+          { duration: '5m', target: 1500 },
+          { duration: '5m', target: 2000 },
+          { duration: '2m', target: 0 },
+        ],
+      };
+    default:
+      throw new Error(`Unknown PROFILE "${profile}". Use smoke, proof, spike, or stress.`);
+  }
+}
+
+function envString(name, fallback = '') {
+  const value = __ENV[name];
+  return value === undefined || value === '' ? fallback : value;
+}
+
+function envInt(name, fallback) {
+  const raw = envString(name, String(fallback));
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be an integer, got "${raw}"`);
+  }
+  return value;
+}
+
+function envNumber(name, fallback) {
+  const raw = envString(name, String(fallback));
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be a number, got "${raw}"`);
+  }
+  return value;
+}
+
+function envBool(name, fallback) {
+  const raw = envString(name, String(fallback));
+  return ['1', 'true', 'yes', 'on'].includes(raw.toLowerCase());
 }
