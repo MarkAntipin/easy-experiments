@@ -18,7 +18,7 @@ PROFILE=stress k6 run loadtest/script.js
 - `smoke`: 10 requests/second for a short validation run.
 - `proof`: ramps to 500 requests/second and holds for 30 minutes.
 - `spike`: proves recovery from a short 1,500 requests/second burst.
-- `stress`: climbs from 250 to 2,000 requests/second to find the ceiling.
+- `stress`: climbs from 250 to 5,000 requests/second to find the ceiling.
 
 The default profile is `smoke`.
 
