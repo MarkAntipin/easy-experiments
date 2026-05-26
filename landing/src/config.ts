@@ -3,7 +3,7 @@ export const siteConfig = {
   name: 'Easy Experiments',
   tagline: 'Self-hosted A/B testing & feature flags on a $5 VPS',
   description:
-    'Open source, self-hosted A/B testing and feature flags. A lightweight LaunchDarkly, Amplitude, and Optimizely alternative that runs on a $5 VPS in a single Docker container.',
+    'Open source, self-hosted A/B testing. A lightweight LaunchDarkly, Amplitude, and Optimizely alternative that runs on a $5 VPS in a single Docker container.',
   // Keep in sync with `site` in astro.config.mjs.
   siteUrl: 'https://easy-experiments.dev',
   adminUrl: 'https://app.easy-experiments.dev',

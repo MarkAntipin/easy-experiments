@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a4eff"/>
+      <stop offset="100%" stop-color="#6e26d9"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eef3ff"/>
+    </linearGradient>
+    <clipPath id="flask-inner">
+      <path d="M468 110 H532 V174 L612 326 A14 14 0 0 1 599 346 H401 A14 14 0 0 1 388 326 L468 174 Z"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <g transform="translate(60, 56)">
+    <g transform="scale(1.6)">
+      <defs>
+        <linearGradient id="liquid-sm" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2a4eff"/>
+          <stop offset="100%" stop-color="#6e26d9"/>
+        </linearGradient>
+        <clipPath id="flask-inner-sm">
+          <path d="M12.5 5 H19.5 V11.2 L26 25.4 A1.4 1.4 0 0 1 24.7 27.4 H7.3 A1.4 1.4 0 0 1 6 25.4 L12.5 11.2 Z"/>
+        </clipPath>
+      </defs>
+      <path d="M11.5 4 H20.5 A0.5 0.5 0 0 1 21 4.5 V5.5 A0.5 0.5 0 0 1 20.5 6 H20 V11 L26.6 25.4 A1.6 1.6 0 0 1 25.2 27.8 H6.8 A1.6 1.6 0 0 1 5.4 25.4 L12 11 V6 H11.5 A0.5 0.5 0 0 1 11 5.5 V4.5 A0.5 0.5 0 0 1 11.5 4 Z" fill="white"/>
+      <rect x="0" y="15" width="32" height="14" fill="url(#liquid-sm)" clip-path="url(#flask-inner-sm)"/>
+      <circle cx="17.5" cy="12" r="0.9" fill="#2a4eff" clip-path="url(#flask-inner-sm)"/>
+      <circle cx="15" cy="14" r="0.7" fill="#2a4eff" clip-path="url(#flask-inner-sm)"/>
+      <path d="M11.5 4 H20.5 A0.5 0.5 0 0 1 21 4.5 V5.5 A0.5 0.5 0 0 1 20.5 6 H20 V11 L26.6 25.4 A1.6 1.6 0 0 1 25.2 27.8 H6.8 A1.6 1.6 0 0 1 5.4 25.4 L12 11 V6 H11.5 A0.5 0.5 0 0 1 11 5.5 V4.5 A0.5 0.5 0 0 1 11.5 4 Z" fill="none" stroke="#0d122e" stroke-width="1.6" stroke-linejoin="round"/>
+    </g>
+    <text x="64" y="40" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="600" fill="#131a3d">easy-experiments.dev</text>
+  </g>
+
+  <g>
+    <text x="80" y="290" font-family="Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#131a3d" letter-spacing="-2">A/B testing that runs</text>
+    <text x="80" y="396" font-family="Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#131a3d" letter-spacing="-2">on a <tspan fill="#131a3d">$5 VPS</tspan></text>
+    <rect x="269" y="412" width="237" height="8" rx="2" fill="#2a4eff"/>
+  </g>
+
+  <text x="80" y="490" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="500" fill="#3a4378">Open source. Self-hosted. One Docker container.</text>
+
+  <g transform="translate(80, 540)">
+    <rect x="0" y="0" width="220" height="54" rx="12" fill="#131a3d"/>
+    <text x="110" y="35" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Try the demo</text>
+
+    <rect x="240" y="0" width="220" height="54" rx="12" fill="none" stroke="#cdd2e3" stroke-width="2"/>
+    <text x="350" y="35" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="600" fill="#1d2244" text-anchor="middle">View on GitHub</text>
+  </g>
+</svg>
