@@ -1,0 +1,252 @@
+---
+import Base from './Base.astro';
+import { siteConfig } from '../config';
+
+interface Props {
+  frontmatter?: {
+    title?: string;
+    description?: string;
+  };
+  title?: string;
+  description?: string;
+}
+
+const { frontmatter, ...rest } = Astro.props;
+const title = frontmatter?.title ?? rest.title ?? 'Docs';
+const description =
+  frontmatter?.description ?? rest.description ?? 'Easy Experiments docs.';
+
+const pageTitle = `${title} | ${siteConfig.name} docs`;
+
+const nav = [
+  { slug: '/docs', label: 'Overview' },
+  { slug: '/docs/create-experiment', label: 'Your first experiment' },
+  { slug: '/docs/events', label: 'Tracking events' },
+  { slug: '/docs/results', label: 'Reading the results' },
+];
+
+const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
+---
+
+<Base title={pageTitle} description={description}>
+  <div class="flex min-h-dvh flex-col">
+    <header
+      class="sticky top-0 z-20 border-b border-ink-100 bg-white/80 backdrop-blur"
+    >
+      <div
+        class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-6"
+      >
+        <a
+          href="/"
+          class="text-base font-semibold tracking-tight text-ink-900 hover:text-ink-700"
+        >
+          {siteConfig.name}
+        </a>
+        <div class="flex items-center gap-2">
+          <a
+            href={siteConfig.githubUrl}
+            target="_blank"
+            rel="noopener"
+            class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-sm font-medium text-ink-800 transition hover:border-ink-300 hover:bg-ink-50"
+          >
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.18-.02-2.14-3.2.7-3.87-1.36-3.87-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.71 0-1.26.45-2.3 1.19-3.11-.12-.29-.51-1.47.11-3.06 0 0 .97-.31 3.18 1.19a11 11 0 0 1 5.79 0c2.2-1.5 3.17-1.19 3.17-1.19.62 1.59.23 2.77.11 3.06.74.81 1.19 1.85 1.19 3.11 0 4.44-2.69 5.41-5.25 5.7.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.68.8.56C20.22 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5Z" />
+            </svg>
+            <span class="hidden sm:inline">GitHub</span>
+          </a>
+          <a
+            href={siteConfig.adminUrl}
+            class="inline-flex h-9 items-center rounded-lg bg-ink-900 px-3.5 text-sm font-medium text-white transition hover:bg-ink-800"
+          >
+            Try a demo
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <div class="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-6 sm:py-12">
+      <div class="lg:grid lg:grid-cols-[14rem_1fr] lg:gap-14">
+        <aside class="mb-8 lg:mb-0">
+          <nav aria-label="Docs">
+            <p
+              class="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400"
+            >
+              Docs
+            </p>
+            <ul class="flex flex-col gap-0.5">
+              {
+                nav.map((item) => {
+                  const isActive = current === item.slug;
+                  return (
+                    <li>
+                      <a
+                        href={item.slug}
+                        aria-current={isActive ? 'page' : undefined}
+                        class:list={[
+                          'block rounded-md px-2.5 py-1.5 text-sm transition',
+                          isActive
+                            ? 'bg-brand-50 font-medium text-brand-700'
+                            : 'text-ink-600 hover:bg-ink-50 hover:text-ink-900',
+                        ]}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  );
+                })
+              }
+            </ul>
+          </nav>
+        </aside>
+
+        <article class="docs-prose min-w-0">
+          <slot />
+        </article>
+      </div>
+    </div>
+
+    <footer
+      class="border-t border-ink-100 px-5 py-6 text-xs text-ink-400 sm:px-6"
+    >
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <span>© {new Date().getFullYear()} {siteConfig.name}</span>
+        <a
+          href={siteConfig.githubUrl}
+          target="_blank"
+          rel="noopener"
+          class="transition hover:text-ink-700"
+        >
+          Source on GitHub
+        </a>
+      </div>
+    </footer>
+  </div>
+</Base>
+
+<style is:global>
+  .docs-prose {
+    color: theme('colors.ink.700');
+    line-height: 1.7;
+  }
+  .docs-prose h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.15;
+    color: theme('colors.ink.900');
+    letter-spacing: -0.01em;
+    margin-top: 0;
+  }
+  .docs-prose h1 + p {
+    color: theme('colors.ink.500');
+    font-size: 1.05rem;
+    margin-top: 0.5rem;
+  }
+  .docs-prose h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: theme('colors.ink.900');
+    margin-top: 2.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .docs-prose h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: theme('colors.ink.900');
+    margin-top: 1.75rem;
+    margin-bottom: 0.25rem;
+  }
+  .docs-prose p {
+    margin-top: 1rem;
+  }
+  .docs-prose strong {
+    color: theme('colors.ink.900');
+    font-weight: 600;
+  }
+  .docs-prose a {
+    color: theme('colors.brand.700');
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+  .docs-prose a:hover {
+    color: theme('colors.brand.800');
+  }
+  .docs-prose ul,
+  .docs-prose ol {
+    margin-top: 0.75rem;
+    padding-left: 1.25rem;
+  }
+  .docs-prose ul {
+    list-style: disc;
+  }
+  .docs-prose ol {
+    list-style: decimal;
+  }
+  .docs-prose li {
+    margin-top: 0.25rem;
+  }
+  .docs-prose li::marker {
+    color: theme('colors.ink.300');
+  }
+  .docs-prose code {
+    background: theme('colors.ink.100');
+    color: theme('colors.ink.900');
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.9em;
+  }
+  .docs-prose pre {
+    background: theme('colors.ink.950');
+    color: theme('colors.ink.50');
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .docs-prose pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+  }
+  .docs-prose hr {
+    border: 0;
+    border-top: 1px solid theme('colors.ink.100');
+    margin: 2rem 0;
+  }
+  .docs-prose blockquote {
+    border-left: 3px solid theme('colors.brand.200');
+    background: theme('colors.brand.50');
+    color: theme('colors.ink.700');
+    padding: 0.6rem 1rem;
+    border-radius: 0 8px 8px 0;
+    margin-top: 1rem;
+  }
+  .docs-prose blockquote p {
+    margin: 0;
+  }
+  .docs-prose .docs-screenshot {
+    margin-top: 1.25rem;
+    overflow: hidden;
+    border: 1px solid theme('colors.ink.100');
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 18px 40px rgb(15 23 42 / 0.08);
+  }
+  .docs-prose .docs-screenshot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .docs-prose .docs-screenshot figcaption {
+    border-top: 1px solid theme('colors.ink.100');
+    background: theme('colors.ink.50');
+    color: theme('colors.ink.500');
+    font-size: 0.85rem;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+  }
+</style>

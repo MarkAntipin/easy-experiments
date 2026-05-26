@@ -8,7 +8,7 @@ export const siteConfig = {
   siteUrl: 'https://easy-experiments.dev',
   adminUrl: 'https://app.easy-experiments.dev',
   githubUrl: 'https://github.com/MarkAntipin/easy-experiments',
-  docsUrl: 'https://github.com/MarkAntipin/easy-experiments#readme',
+  docsUrl: '/docs',
   contactEmail: 'mr.antipin@gmail.com',
   // Drop a 1200x630 PNG at /public/og-image.png before deploying.
   ogImagePath: '/og-image.png',

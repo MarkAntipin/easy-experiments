@@ -222,14 +222,16 @@ function scenarioFor(profile) {
       };
     case 'stress':
       return {
-        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 800),
-        maxVUs: envInt('MAX_VUS', 4000),
+        preAllocatedVUs: envInt('PRE_ALLOCATED_VUS', 1500),
+        maxVUs: envInt('MAX_VUS', 10000),
         stages: [
           { duration: '3m', target: 250 },
           { duration: '5m', target: 500 },
           { duration: '5m', target: 1000 },
-          { duration: '5m', target: 1500 },
           { duration: '5m', target: 2000 },
+          { duration: '5m', target: 3000 },
+          { duration: '5m', target: 4000 },
+          { duration: '5m', target: 5000 },
           { duration: '2m', target: 0 },
         ],
       };
